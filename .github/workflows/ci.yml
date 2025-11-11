@@ -25,6 +25,13 @@ jobs:
         override: true
         components: rust-src, clippy
 
+    - name: Install Rust nightly (for eBPF)
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        profile: minimal
+        components: rust-src
+
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -37,7 +44,7 @@ jobs:
           libbpf-dev
 
     - name: Add BPF target
-      run: rustup target add bpfel-unknown-none
+      run: rustup +nightly target add bpfel-unknown-none
 
     - name: Cache cargo registry
       uses: actions/cache@v4

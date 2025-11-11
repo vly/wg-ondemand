@@ -41,8 +41,10 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Add BPF target
-      run: rustup target add bpfel-unknown-none || true
+    - name: Install Rust nightly and add BPF target
+      run: |
+        rustup toolchain install nightly --component rust-src
+        rustup +nightly target add bpfel-unknown-none
 
     - name: Set up RPM build tree
       run: rpmdev-setuptree
