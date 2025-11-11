@@ -1,5 +1,5 @@
 Name:           wg-ondemand
-Version:        0.1.0
+Version:        0.1.1
 Release:        1%{?dist}
 Summary:        Automatic WireGuard VPN activation on-demand
 
