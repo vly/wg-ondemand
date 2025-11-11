@@ -27,15 +27,13 @@ jobs:
           git \
           rpm-build \
           rpmdevtools \
-          rust \
-          cargo \
           clang \
           llvm \
           elfutils-libelf-devel \
           kernel-devel \
           libbpf-devel \
           systemd-rpm-macros \
-          rust-src
+          curl
 
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -44,6 +42,15 @@ jobs:
 
     - name: Fix git safe directory
       run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+    - name: Install Rust via rustup
+      run: |
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+        . $HOME/.cargo/env
+        rustup toolchain install nightly --component rust-src
+        cargo install bpf-linker
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        echo "PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
 
     - name: Set up RPM build tree
       run: rpmdev-setuptree

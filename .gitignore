@@ -19,6 +19,7 @@ result-*
 *.swp
 *.swo
 *~
+TODO.md
 
 # OS
 .DS_Store
@@ -26,6 +27,7 @@ Thumbs.db
 
 # Local config
 /config/local.toml
+test-ci.sh
 
 # Logs
 *.log

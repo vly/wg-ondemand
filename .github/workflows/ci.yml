@@ -43,6 +43,9 @@ jobs:
           pkg-config \
           libbpf-dev
 
+    - name: Install bpf-linker
+      run: cargo install bpf-linker
+
     - name: Cache cargo registry
       uses: actions/cache@v4
       with:
