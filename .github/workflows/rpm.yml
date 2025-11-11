@@ -95,19 +95,19 @@ jobs:
         wg-ondemand --version || echo "Binary installed successfully"
 
     - name: Upload RPM artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: rpm-packages-${{ steps.version.outputs.VERSION }}
         path: |
-          ~/rpmbuild/RPMS/x86_64/*.rpm
-          ~/rpmbuild/SRPMS/*.rpm
+          ${{ env.HOME }}/rpmbuild/RPMS/x86_64/*.rpm
+          ${{ env.HOME }}/rpmbuild/SRPMS/*.rpm
 
     - name: Upload to GitHub Release
       if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          ~/rpmbuild/RPMS/x86_64/*.rpm
-          ~/rpmbuild/SRPMS/*.rpm
+          ${{ env.HOME }}/rpmbuild/RPMS/x86_64/*.rpm
+          ${{ env.HOME }}/rpmbuild/SRPMS/*.rpm
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
