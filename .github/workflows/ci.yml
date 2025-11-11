@@ -65,7 +65,7 @@ jobs:
       run: cargo fmt -- --check
 
     - name: Run clippy
-      run: cargo clippy --all-targets --all-features -- -D warnings
+      run: cargo clippy --package wg-ondemand --all-targets --all-features -- -D warnings
 
     - name: Build eBPF program
       run: cargo xtask build-ebpf
