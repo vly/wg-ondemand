@@ -4,9 +4,9 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use std::path::PathBuf;
 use std::time::Duration;
+use tokio::signal;
 use tokio::sync::mpsc;
 use tokio::time::interval;
-use tokio::signal;
 use wg_ondemand::{
     config::load_config,
     ebpf_loader::EbpfManager,
@@ -50,7 +50,10 @@ async fn auto_detect_interface() -> Result<String> {
             let iface_name = entry.file_name();
             let wireless_path = format!("/sys/class/net/{}/wireless", iface_name.to_string_lossy());
             if std::path::Path::new(&wireless_path).exists() {
-                log::info!("Auto-detected wireless interface: {}", iface_name.to_string_lossy());
+                log::info!(
+                    "Auto-detected wireless interface: {}",
+                    iface_name.to_string_lossy()
+                );
                 return Ok(iface_name.to_string_lossy().to_string());
             }
         }
@@ -78,7 +81,9 @@ async fn auto_detect_interface() -> Result<String> {
         }
     }
 
-    anyhow::bail!("Could not auto-detect network interface. Please specify monitor_interface in config.")
+    anyhow::bail!(
+        "Could not auto-detect network interface. Please specify monitor_interface in config."
+    )
 }
 
 /// Perform graceful shutdown: clean up resources before exiting
@@ -157,7 +162,8 @@ async fn async_main() -> Result<()> {
         Some(iface) => iface,
         None => {
             log::info!("Auto-detecting network interface...");
-            auto_detect_interface().await
+            auto_detect_interface()
+                .await
                 .context("Failed to auto-detect network interface")?
         }
     };
@@ -183,7 +189,9 @@ async fn async_main() -> Result<()> {
 
     if initial_connected {
         if tunnel_already_up {
-            log::info!("Already connected to target SSID and tunnel is up, transitioning to Active state");
+            log::info!(
+                "Already connected to target SSID and tunnel is up, transitioning to Active state"
+            );
             // State sequence: Inactive -> Monitoring -> Active (tunnel already up)
             state_tx.send(StateCommand::StartMonitoring).await?;
             state_tx.send(StateCommand::TunnelAlreadyUp).await?;

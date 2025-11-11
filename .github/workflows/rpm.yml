@@ -17,35 +17,23 @@ env:
 jobs:
   build-rpm:
     runs-on: ubuntu-latest
-    container:
-      image: fedora:latest
 
     steps:
-    - name: Install build dependencies
-      run: |
-        dnf install -y \
-          git \
-          rpm-build \
-          rpmdevtools \
-          rust \
-          cargo \
-          clang \
-          llvm \
-          elfutils-libelf-devel \
-          kernel-devel \
-          libbpf-devel \
-          systemd-rpm-macros
-
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
-    - name: Add BPF target
-      run: rustup target add bpfel-unknown-none || true
+    - name: Install Nix
+      uses: DeterminateSystems/nix-installer-action@main
+
+    - name: Setup Nix cache
+      uses: DeterminateSystems/magic-nix-cache-action@main
 
     - name: Set up RPM build tree
-      run: rpmdev-setuptree
+      run: |
+        mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+        mkdir -p ~/rpmbuild/RPMS/x86_64
 
     - name: Get version
       id: version
@@ -58,27 +46,48 @@ jobs:
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version: $VERSION"
 
-    - name: Create source tarball
+    - name: Create source tarball with pre-built binaries
       run: |
         VERSION=${{ steps.version.outputs.VERSION }}
-        git archive --format=tar.gz --prefix=wg-ondemand-${VERSION}/ HEAD > ~/rpmbuild/SOURCES/wg-ondemand-${VERSION}.tar.gz
+
+        # Build with Nix first
+        nix develop --command cargo xtask build-ebpf --release
+        nix develop --command cargo build --release --package wg-ondemand
+
+        # Create tarball with source AND pre-built binaries
+        tar czf ~/rpmbuild/SOURCES/wg-ondemand-${VERSION}.tar.gz \
+          --transform="s,^,wg-ondemand-${VERSION}/," \
+          --exclude='.git' \
+          --exclude='result' \
+          --exclude='.direnv' \
+          .
 
     - name: Copy spec file
       run: cp wg-ondemand.spec ~/rpmbuild/SPECS/
 
     - name: Build source RPM
       run: |
-        cd ~/rpmbuild/SPECS
-        rpmbuild -bs \
-          --define "version ${{ steps.version.outputs.VERSION }}" \
-          wg-ondemand.spec
+        nix-shell -p rpm --run "
+          cd ~/rpmbuild/SPECS
+          rpmbuild -bs \
+            --define 'version ${{ steps.version.outputs.VERSION }}' \
+            --define '_bindir /usr/bin' \
+            --define '_sysconfdir /etc' \
+            --define '_unitdir /usr/lib/systemd/system' \
+            wg-ondemand.spec
+        "
 
     - name: Build binary RPM
       run: |
-        cd ~/rpmbuild/SPECS
-        rpmbuild -bb \
-          --define "version ${{ steps.version.outputs.VERSION }}" \
-          wg-ondemand.spec
+        nix-shell -p rpm --run "
+          cd ~/rpmbuild/SPECS
+          rpmbuild -bb \
+            --define 'version ${{ steps.version.outputs.VERSION }}' \
+            --define '_bindir /usr/bin' \
+            --define '_sysconfdir /etc' \
+            --define '_unitdir /usr/lib/systemd/system' \
+            wg-ondemand.spec
+        "
 
     - name: List built packages
       run: |
@@ -88,26 +97,26 @@ jobs:
         echo "Binary RPMs:"
         ls -lh ~/rpmbuild/RPMS/x86_64/
 
-    - name: Test install RPM
+    - name: Verify RPM contents
       run: |
-        dnf install -y ~/rpmbuild/RPMS/x86_64/wg-ondemand-*.rpm
-        which wg-ondemand
-        wg-ondemand --version || echo "Binary installed successfully"
+        nix-shell -p rpm --run "
+          rpm -qpl ~/rpmbuild/RPMS/x86_64/wg-ondemand-*.rpm
+        "
 
     - name: Upload RPM artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: rpm-packages-${{ steps.version.outputs.VERSION }}
         path: |
-          ~/rpmbuild/RPMS/x86_64/*.rpm
-          ~/rpmbuild/SRPMS/*.rpm
+          ${{ env.HOME }}/rpmbuild/RPMS/x86_64/*.rpm
+          ${{ env.HOME }}/rpmbuild/SRPMS/*.rpm
 
     - name: Upload to GitHub Release
       if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          ~/rpmbuild/RPMS/x86_64/*.rpm
-          ~/rpmbuild/SRPMS/*.rpm
+          ${{ env.HOME }}/rpmbuild/RPMS/x86_64/*.rpm
+          ${{ env.HOME }}/rpmbuild/SRPMS/*.rpm
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

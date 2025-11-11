@@ -100,7 +100,7 @@ impl StateManager {
             (TunnelState::Monitoring, StateCommand::TunnelAlreadyUp) => {
                 log::info!("Tunnel already up, transitioning to Active state");
                 self.state = TunnelState::Active;
-                StateAction::None  // No action needed, tunnel is already up
+                StateAction::None // No action needed, tunnel is already up
             }
 
             // Tunnel successfully brought up

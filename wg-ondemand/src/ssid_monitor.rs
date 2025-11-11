@@ -26,9 +26,11 @@ pub enum NetworkEvent {
     default_path = "/org/freedesktop/NetworkManager"
 )]
 trait NetworkManager {
+    /// Get the primary connection object path
     #[zbus(property)]
     fn primary_connection(&self) -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
 
+    /// Get all active connections
     #[zbus(property)]
     fn active_connections(&self) -> zbus::Result<Vec<zbus::zvariant::OwnedObjectPath>>;
 }
@@ -39,12 +41,15 @@ trait NetworkManager {
     default_service = "org.freedesktop.NetworkManager"
 )]
 trait ActiveConnection {
+    /// Get the connection ID
     #[zbus(property)]
     fn id(&self) -> zbus::Result<String>;
 
+    /// Get the connection type
     #[zbus(property, name = "Type")]
     fn connection_type(&self) -> zbus::Result<String>;
 
+    /// Get the devices associated with this connection
     #[zbus(property)]
     fn devices(&self) -> zbus::Result<Vec<zbus::zvariant::OwnedObjectPath>>;
 }
@@ -55,6 +60,7 @@ trait ActiveConnection {
     default_service = "org.freedesktop.NetworkManager"
 )]
 trait WirelessDevice {
+    /// Get the active access point object path
     #[zbus(property)]
     fn active_access_point(&self) -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
 }
@@ -65,6 +71,7 @@ trait WirelessDevice {
     default_service = "org.freedesktop.NetworkManager"
 )]
 trait AccessPoint {
+    /// Get the SSID as raw bytes
     #[zbus(property)]
     fn ssid(&self) -> zbus::Result<Vec<u8>>;
 }

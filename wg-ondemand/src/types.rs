@@ -13,42 +13,59 @@ use serde::Deserialize;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct TrafficEvent {
-    pub timestamp: u64, // Kernel timestamp (ns)
-    pub dest_ip: u32,   // Destination IP in network byte order
-    pub dest_port: u16, // Destination port
-    pub protocol: u8,   // IPPROTO_TCP, IPPROTO_UDP, etc.
-    pub _padding: u8,   // Padding for alignment
+    /// Kernel timestamp in nanoseconds
+    pub timestamp: u64,
+    /// Destination IP in network byte order
+    pub dest_ip: u32,
+    /// Destination port
+    pub dest_port: u16,
+    /// IP protocol (IPPROTO_TCP, IPPROTO_UDP, etc.)
+    pub protocol: u8,
+    /// Padding for alignment
+    pub _padding: u8,
 }
 
 /// Tunnel state machine states
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TunnelState {
-    Inactive,     // Tunnel down, not monitoring
-    Monitoring,   // Tunnel down, monitoring traffic
-    Activating,   // Tunnel coming up
-    Active,       // Tunnel up and running
-    Deactivating, // Tunnel going down
+    /// Tunnel down, not monitoring
+    Inactive,
+    /// Tunnel down, monitoring traffic
+    Monitoring,
+    /// Tunnel coming up
+    Activating,
+    /// Tunnel up and running
+    Active,
+    /// Tunnel going down
+    Deactivating,
 }
 
 /// Main configuration structure
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
+    /// General configuration options
     pub general: GeneralConfig,
+    /// Subnet configuration
     pub subnets: SubnetConfig,
 }
 
 /// General configuration options
 #[derive(Debug, Deserialize, Clone)]
 pub struct GeneralConfig {
+    /// Target SSID to monitor for connection
     pub target_ssid: String,
+    /// WireGuard interface name
     pub wg_interface: String,
     /// NetworkManager connection name (if using NetworkManager instead of wg-quick)
     #[serde(default)]
     pub nm_connection: Option<String>,
+    /// Network interface to monitor (auto-detected if not specified)
     #[serde(default)]
     pub monitor_interface: Option<String>,
+    /// Idle timeout in seconds before deactivating tunnel
     #[serde(default = "default_idle_timeout")]
     pub idle_timeout: u64,
+    /// Log level (trace, debug, info, warn, error)
     #[serde(default = "default_log_level")]
     pub log_level: String,
 }
@@ -56,7 +73,8 @@ pub struct GeneralConfig {
 /// Subnet configuration
 #[derive(Debug, Deserialize, Clone)]
 pub struct SubnetConfig {
-    pub ranges: Vec<String>, // CIDR notation
+    /// Target subnet ranges in CIDR notation (e.g., "192.168.1.0/24")
+    pub ranges: Vec<String>,
 }
 
 // Default values for configuration

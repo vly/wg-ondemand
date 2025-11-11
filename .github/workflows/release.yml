@@ -11,9 +11,6 @@ on:
         required: true
         default: 'v0.1.0'
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -22,51 +19,14 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        profile: minimal
-        override: true
-        components: rust-src
+    - name: Install Nix
+      uses: DeterminateSystems/nix-installer-action@main
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          llvm \
-          clang \
-          libelf-dev \
-          linux-headers-$(uname -r) \
-          pkg-config \
-          libbpf-dev
+    - name: Setup Nix cache
+      uses: DeterminateSystems/magic-nix-cache-action@main
 
-    - name: Add BPF target
-      run: rustup target add bpfel-unknown-none
-
-    - name: Cache cargo registry
-      uses: actions/cache@v3
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Cache cargo index
-      uses: actions/cache@v3
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Cache cargo build
-      uses: actions/cache@v3
-      with:
-        path: target
-        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Build eBPF program
-      run: cargo xtask build-ebpf --release
-
-    - name: Build daemon
-      run: cargo build --release --package wg-ondemand
+    - name: Build release package
+      run: nix build
 
     - name: Determine version
       id: version
@@ -83,8 +43,8 @@ jobs:
         RELEASE_DIR="wg-ondemand-${VERSION}"
         mkdir -p ${RELEASE_DIR}/{bin,scripts,config,systemd,docs}
 
-        # Copy binaries
-        cp target/release/wg-ondemand ${RELEASE_DIR}/bin/
+        # Copy binaries from Nix build
+        cp result/bin/wg-ondemand ${RELEASE_DIR}/bin/
         cp scripts/setup-tc.sh ${RELEASE_DIR}/bin/wg-ondemand-setup-tc
         chmod +x ${RELEASE_DIR}/bin/*
 
@@ -168,7 +128,7 @@ jobs:
         sha256sum ${RELEASE_DIR}.tar.gz > ${RELEASE_DIR}.tar.gz.sha256
 
     - name: Upload release artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: wg-ondemand-${{ steps.version.outputs.VERSION }}
         path: |
