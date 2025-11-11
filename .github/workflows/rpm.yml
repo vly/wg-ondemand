@@ -34,17 +34,13 @@ jobs:
           elfutils-libelf-devel \
           kernel-devel \
           libbpf-devel \
-          systemd-rpm-macros
+          systemd-rpm-macros \
+          rust-src
 
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-
-    - name: Install Rust nightly and add BPF target
-      run: |
-        rustup toolchain install nightly --component rust-src
-        rustup +nightly target add bpfel-unknown-none
 
     - name: Set up RPM build tree
       run: rpmdev-setuptree
