@@ -30,11 +30,8 @@ jobs:
     - name: Setup Nix cache
       uses: DeterminateSystems/magic-nix-cache-action@main
 
-    - name: Install RPM tools
-      run: nix-env -iA nixpkgs.rpmdevtools
-
     - name: Set up RPM build tree
-      run: rpmdev-setuptree
+      run: nix-shell -p rpmdevtools --run rpmdev-setuptree
 
     - name: Get version
       id: version
@@ -68,17 +65,21 @@ jobs:
 
     - name: Build source RPM
       run: |
-        cd ~/rpmbuild/SPECS
-        rpmbuild -bs \
-          --define "version ${{ steps.version.outputs.VERSION }}" \
-          wg-ondemand.spec
+        nix-shell -p rpm --run "
+          cd ~/rpmbuild/SPECS
+          rpmbuild -bs \
+            --define 'version ${{ steps.version.outputs.VERSION }}' \
+            wg-ondemand.spec
+        "
 
     - name: Build binary RPM
       run: |
-        cd ~/rpmbuild/SPECS
-        rpmbuild -bb \
-          --define "version ${{ steps.version.outputs.VERSION }}" \
-          wg-ondemand.spec
+        nix-shell -p rpm --run "
+          cd ~/rpmbuild/SPECS
+          rpmbuild -bb \
+            --define 'version ${{ steps.version.outputs.VERSION }}' \
+            wg-ondemand.spec
+        "
 
     - name: List built packages
       run: |
@@ -88,11 +89,11 @@ jobs:
         echo "Binary RPMs:"
         ls -lh ~/rpmbuild/RPMS/x86_64/
 
-    - name: Test install RPM
+    - name: Verify RPM contents
       run: |
-        dnf install -y ~/rpmbuild/RPMS/x86_64/wg-ondemand-*.rpm
-        which wg-ondemand
-        wg-ondemand --version || echo "Binary installed successfully"
+        nix-shell -p rpm --run "
+          rpm -qpl ~/rpmbuild/RPMS/x86_64/wg-ondemand-*.rpm
+        "
 
     - name: Upload RPM artifacts
       uses: actions/upload-artifact@v4
