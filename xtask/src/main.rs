@@ -22,6 +22,7 @@ fn main() -> Result<()> {
 
 fn build_ebpf(release: bool) -> Result<()> {
     let mut cmd = Command::new("cargo");
+    cmd.env("RUSTUP_TOOLCHAIN", "nightly");
     cmd.args([
         "build",
         "--package",
