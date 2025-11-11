@@ -33,6 +33,17 @@ fn validate_name(name: &str, field_name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Public wrapper for validating interface names.
+/// Validates that the interface name is safe for use in shell commands and system calls.
+///
+/// # Errors
+///
+/// Returns an error if the interface name is empty or contains invalid characters.
+/// Only alphanumeric characters, hyphens, and underscores are allowed.
+pub fn validate_interface_name(name: &str) -> Result<()> {
+    validate_name(name, "Interface name")
+}
+
 /// Controller for managing WireGuard tunnel state
 pub struct WgController {
     interface: String,
