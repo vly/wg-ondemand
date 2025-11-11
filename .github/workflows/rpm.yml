@@ -31,7 +31,9 @@ jobs:
       uses: DeterminateSystems/magic-nix-cache-action@main
 
     - name: Set up RPM build tree
-      run: nix-shell -p rpm --run rpmdev-setuptree
+      run: |
+        mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+        mkdir -p ~/rpmbuild/RPMS/x86_64
 
     - name: Get version
       id: version
