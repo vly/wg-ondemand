@@ -226,6 +226,25 @@ sudo systemctl daemon-reload
 - Make sure you've actually stopped accessing home resources
 - View logs: `sudo journalctl -u wg-ondemand -f`
 
+### Daemon won't start after crash
+
+If the daemon was killed unexpectedly (e.g., power loss, SIGKILL), stale eBPF programs may remain attached to the network interface. The daemon automatically cleans these up on startup, but if you need to clean up manually:
+
+```bash
+# Replace 'wlan0' with your network interface name
+sudo tc filter del dev wlan0 egress
+
+# Then restart the daemon
+sudo systemctl restart wg-ondemand
+```
+
+To find your network interface name:
+```bash
+ip link show
+# or
+nmcli device status
+```
+
 ### Need more help?
 
 Enable debug logging:

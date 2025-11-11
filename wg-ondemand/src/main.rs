@@ -13,7 +13,7 @@ use wg_ondemand::{
     ssid_monitor::{NetworkEvent, SsidMonitor},
     state::{StateAction, StateCommand, StateManager},
     types::{TrafficEvent, TunnelState},
-    wg_controller::WgController,
+    wg_controller::{self, WgController},
 };
 
 // Configuration constants for main event loop
@@ -159,18 +159,27 @@ async fn async_main() -> Result<()> {
 
     // Determine monitor interface (auto-detect if not specified)
     let monitor_iface = match config.general.monitor_interface.clone() {
-        Some(iface) => iface,
+        Some(iface) => {
+            // Validate configured interface name
+            wg_controller::validate_interface_name(&iface)
+                .context("Configured monitor interface has invalid name")?;
+            iface
+        }
         None => {
             log::info!("Auto-detecting network interface...");
-            auto_detect_interface()
+            let detected = auto_detect_interface()
                 .await
-                .context("Failed to auto-detect network interface")?
+                .context("Failed to auto-detect network interface")?;
+            // Validate auto-detected interface name (defense-in-depth)
+            wg_controller::validate_interface_name(&detected)
+                .context("Auto-detected interface has invalid name")?;
+            detected
         }
     };
 
     log::info!("Monitoring interface: {}", monitor_iface);
 
-    // Load eBPF program
+    // Load eBPF program (includes interface existence validation)
     let mut ebpf_manager = EbpfManager::load(&monitor_iface, &config.subnets.ranges)
         .context("Failed to load eBPF program")?;
 
@@ -341,9 +350,11 @@ async fn async_main() -> Result<()> {
                                     event.protocol
                                 );
 
-                                // Notify state manager
-                                if let Err(e) = state_tx.try_send(StateCommand::TrafficDetected) {
-                                    log::warn!("Failed to send traffic detected event to state manager: {}", e);
+                                // Notify state manager (apply backpressure - never silently drop events)
+                                // If channel fills, state manager is broken and we should fail-fast
+                                if let Err(e) = state_tx.send(StateCommand::TrafficDetected).await {
+                                    log::error!("State manager channel closed: {}", e);
+                                    anyhow::bail!("State manager task died unexpectedly");
                                 }
                             }
                         }

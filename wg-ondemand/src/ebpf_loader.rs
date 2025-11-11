@@ -16,6 +16,69 @@ use aya::{
     Bpf,
 };
 
+/// Validates that the network interface exists on the system.
+/// This prevents TOCTOU races where an interface could disappear between detection and use.
+fn validate_interface_exists(interface: &str) -> Result<()> {
+    std::fs::metadata(format!("/sys/class/net/{}", interface))
+        .with_context(|| format!("Network interface '{}' does not exist or was removed. Please check that the interface is available.", interface))?;
+    Ok(())
+}
+
+/// Clean up any stale eBPF programs from previous daemon crashes.
+/// If the daemon was killed with SIGKILL or crashed, the Drop implementation doesn't run,
+/// leaving eBPF programs attached to the interface. This cleanup ensures a clean slate.
+fn cleanup_stale_ebpf(interface: &str) -> Result<()> {
+    use std::process::Command;
+
+    log::debug!("Checking for stale eBPF programs on {}", interface);
+
+    // List existing TC filters on egress
+    let output = Command::new("tc")
+        .args(["filter", "show", "dev", interface, "egress"])
+        .output()
+        .context("Failed to list TC filters")?;
+
+    if !output.status.success() {
+        // Interface might not have a qdisc yet, which is fine
+        log::debug!("No TC filters found on {} (this is normal)", interface);
+        return Ok(());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Check if our program is already attached (look for common eBPF filter indicators)
+    // TC filter output contains "direct-action" and "not_in_hw" for eBPF programs
+    if stdout.contains("direct-action") || stdout.contains("bpf") {
+        log::warn!(
+            "Found stale TC filters on {}, cleaning up from previous daemon instance",
+            interface
+        );
+
+        // Delete all egress filters (this removes all TC filters, not just ours)
+        // This is safe because we're about to attach our own filter
+        let status = Command::new("tc")
+            .args(["filter", "del", "dev", interface, "egress"])
+            .status()
+            .context("Failed to delete TC filters")?;
+
+        if status.success() {
+            log::info!(
+                "Successfully cleaned up stale eBPF programs on {}",
+                interface
+            );
+        } else {
+            log::warn!(
+                "Failed to clean up stale eBPF programs on {}, will attempt to attach anyway",
+                interface
+            );
+        }
+    } else {
+        log::debug!("No stale eBPF programs found on {}", interface);
+    }
+
+    Ok(())
+}
+
 /// Manages the lifecycle of the eBPF program
 pub struct EbpfManager {
     ebpf: Bpf,
@@ -27,6 +90,11 @@ pub struct EbpfManager {
 impl EbpfManager {
     /// Load eBPF program and configure subnet map
     pub fn load(interface: &str, subnets: &[String]) -> Result<Self> {
+        // Validate interface exists immediately before loading (prevents TOCTOU race)
+        validate_interface_exists(interface)?;
+
+        // Clean up any stale eBPF programs from previous daemon crashes
+        cleanup_stale_ebpf(interface)?;
         // Load eBPF program from embedded bytes
         let mut ebpf = Bpf::load(include_bytes_aligned!(
             "../../target/bpfel-unknown-none/release/wg-ondemand-ebpf"

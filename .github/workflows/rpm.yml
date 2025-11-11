@@ -103,20 +103,22 @@ jobs:
           rpm -qpl ~/rpmbuild/RPMS/x86_64/wg-ondemand-*.rpm
         "
 
+    - name: Copy RPM artifacts to workspace
+      run: |
+        mkdir -p rpm-artifacts
+        cp ~/rpmbuild/RPMS/x86_64/*.rpm rpm-artifacts/
+        cp ~/rpmbuild/SRPMS/*.rpm rpm-artifacts/
+
     - name: Upload RPM artifacts
       uses: actions/upload-artifact@v4
       with:
         name: rpm-packages-${{ steps.version.outputs.VERSION }}
-        path: |
-          ${{ env.HOME }}/rpmbuild/RPMS/x86_64/*.rpm
-          ${{ env.HOME }}/rpmbuild/SRPMS/*.rpm
+        path: rpm-artifacts/*.rpm
 
     - name: Upload to GitHub Release
       if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
-        files: |
-          ${{ env.HOME }}/rpmbuild/RPMS/x86_64/*.rpm
-          ${{ env.HOME }}/rpmbuild/SRPMS/*.rpm
+        files: rpm-artifacts/*.rpm
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
