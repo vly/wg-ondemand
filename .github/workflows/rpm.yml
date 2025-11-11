@@ -71,6 +71,9 @@ jobs:
           cd ~/rpmbuild/SPECS
           rpmbuild -bs \
             --define 'version ${{ steps.version.outputs.VERSION }}' \
+            --define '_bindir /usr/bin' \
+            --define '_sysconfdir /etc' \
+            --define '_unitdir /usr/lib/systemd/system' \
             wg-ondemand.spec
         "
 
@@ -80,6 +83,9 @@ jobs:
           cd ~/rpmbuild/SPECS
           rpmbuild -bb \
             --define 'version ${{ steps.version.outputs.VERSION }}' \
+            --define '_bindir /usr/bin' \
+            --define '_sysconfdir /etc' \
+            --define '_unitdir /usr/lib/systemd/system' \
             wg-ondemand.spec
         "
 
