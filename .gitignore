@@ -1,7 +1,7 @@
 # Rust
 /target/
 **/*.rs.bk
-Cargo.lock
+# Note: Cargo.lock is tracked for applications (not libraries)
 
 # eBPF build artifacts
 *.bpf.o
@@ -19,7 +19,6 @@ result-*
 *.swp
 *.swo
 *~
-TODO.md
 
 # OS
 .DS_Store
@@ -27,7 +26,10 @@ Thumbs.db
 
 # Local config
 /config/local.toml
-test-ci.sh
 
 # Logs
 *.log
+
+# Misc
+TODO.md
+test-ci.sh

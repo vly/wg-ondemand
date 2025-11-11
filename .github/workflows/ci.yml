@@ -6,9 +6,6 @@ on:
   pull_request:
     branches: [ main, develop ]
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -17,72 +14,32 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        profile: minimal
-        override: true
-        components: rust-src, clippy
+    - name: Install Nix
+      uses: DeterminateSystems/nix-installer-action@main
 
-    - name: Install Rust nightly (for eBPF)
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
-        profile: minimal
-        components: rust-src
+    - name: Setup Nix cache
+      uses: DeterminateSystems/magic-nix-cache-action@main
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          llvm \
-          clang \
-          libelf-dev \
-          linux-headers-$(uname -r) \
-          pkg-config \
-          libbpf-dev
-
-    - name: Install bpf-linker
-      run: cargo install bpf-linker
-
-    - name: Cache cargo registry
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Cache cargo index
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Cache cargo build
-      uses: actions/cache@v4
-      with:
-        path: target
-        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+    - name: Check Nix flake
+      run: nix flake check
 
     - name: Check formatting
-      run: cargo fmt -- --check
-
-    - name: Build eBPF program
-      run: cargo xtask build-ebpf
+      run: nix develop --command cargo fmt -- --check
 
     - name: Run clippy
-      run: cargo clippy --package wg-ondemand --all-targets --all-features -- -D warnings
+      run: nix develop --command cargo clippy --package wg-ondemand --all-targets --all-features -- -D warnings
 
-    - name: Build daemon
-      run: cargo build --package wg-ondemand
+    - name: Build eBPF program
+      run: nix develop --command cargo xtask build-ebpf --release
+
+    - name: Build daemon (debug)
+      run: nix develop --command cargo build --package wg-ondemand
 
     - name: Run tests
-      run: cargo test --package wg-ondemand --lib
+      run: nix develop --command cargo test --package wg-ondemand --lib
 
     - name: Build release
-      run: |
-        cargo xtask build-ebpf --release
-        cargo build --release --package wg-ondemand
+      run: nix develop --command cargo build --release --package wg-ondemand
 
     - name: Verify scripts are executable
       run: |

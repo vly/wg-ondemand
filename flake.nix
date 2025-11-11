@@ -74,6 +74,12 @@
         # Use bpf-linker from nixpkgs (version 0.9.15)
         bpf-linker = pkgs.bpf-linker;
 
+        # Create a custom Rust platform using the nightly toolchain
+        rustPlatformNightly = pkgs.makeRustPlatform {
+          cargo = rustToolchain;
+          rustc = rustToolchain;
+        };
+
       in
       {
         devShells.default = pkgs.mkShell {
@@ -112,27 +118,41 @@
         };
 
         # Package definition (for building the project)
-        packages.default = pkgs.rustPlatform.buildRustPackage {
+        # Note: Using stdenv.mkDerivation instead of buildRustPackage because
+        # eBPF compilation with -Z build-std requires network access to download
+        # standard library dependencies that aren't in Cargo.lock
+        packages.default = pkgs.stdenv.mkDerivation {
           pname = "wg-ondemand";
           version = "0.1.0";
 
           src = ./.;
 
-          cargoLock = {
-            lockFile = ./Cargo.lock;
-          };
-
           nativeBuildInputs = [
+            rustToolchain
             pkgs.pkg-config
             bpf-linker
           ] ++ ebpfDeps;
 
           buildInputs = systemDeps;
 
-          # eBPF programs need special handling
-          preBuild = ''
-            # Build eBPF program first
+          # Set environment variables for build
+          RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
+          LIBCLANG_PATH = "${pkgs.llvmPackages_latest.libclang.lib}/lib";
+
+          buildPhase = ''
+            # Set up cargo home in build directory
+            export CARGO_HOME=$(mktemp -d)
+
+            # Build eBPF program
             cargo xtask build-ebpf --release
+
+            # Build userspace daemon
+            cargo build --release --package wg-ondemand
+          '';
+
+          installPhase = ''
+            mkdir -p $out/bin
+            cp target/release/wg-ondemand $out/bin/
           '';
 
           meta = with pkgs.lib; {
