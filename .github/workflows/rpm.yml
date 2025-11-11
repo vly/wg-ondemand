@@ -17,40 +17,21 @@ env:
 jobs:
   build-rpm:
     runs-on: ubuntu-latest
-    container:
-      image: fedora:latest
 
     steps:
-    - name: Install build dependencies
-      run: |
-        dnf install -y \
-          git \
-          rpm-build \
-          rpmdevtools \
-          clang \
-          llvm \
-          elfutils-libelf-devel \
-          kernel-devel \
-          libbpf-devel \
-          systemd-rpm-macros \
-          curl
-
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
-    - name: Fix git safe directory
-      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+    - name: Install Nix
+      uses: DeterminateSystems/nix-installer-action@main
 
-    - name: Install Rust via rustup
-      run: |
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
-        . $HOME/.cargo/env
-        rustup toolchain install nightly --component rust-src
-        cargo install bpf-linker
-        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-        echo "PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
+    - name: Setup Nix cache
+      uses: DeterminateSystems/magic-nix-cache-action@main
+
+    - name: Install RPM tools
+      run: nix-env -iA nixpkgs.rpmdevtools
 
     - name: Set up RPM build tree
       run: rpmdev-setuptree
@@ -66,10 +47,21 @@ jobs:
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version: $VERSION"
 
-    - name: Create source tarball
+    - name: Create source tarball with pre-built binaries
       run: |
         VERSION=${{ steps.version.outputs.VERSION }}
-        git archive --format=tar.gz --prefix=wg-ondemand-${VERSION}/ HEAD > ~/rpmbuild/SOURCES/wg-ondemand-${VERSION}.tar.gz
+
+        # Build with Nix first
+        nix develop --command cargo xtask build-ebpf --release
+        nix develop --command cargo build --release --package wg-ondemand
+
+        # Create tarball with source AND pre-built binaries
+        tar czf ~/rpmbuild/SOURCES/wg-ondemand-${VERSION}.tar.gz \
+          --transform="s,^,wg-ondemand-${VERSION}/," \
+          --exclude='.git' \
+          --exclude='result' \
+          --exclude='.direnv' \
+          .
 
     - name: Copy spec file
       run: cp wg-ondemand.spec ~/rpmbuild/SPECS/

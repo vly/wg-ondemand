@@ -7,14 +7,18 @@ License:        MIT
 URL:            https://github.com/vly/wg-ondemand
 Source0:        %{name}-%{version}.tar.gz
 
-BuildRequires:  rust >= 1.70
-BuildRequires:  cargo
-BuildRequires:  clang
-BuildRequires:  llvm
-BuildRequires:  elfutils-libelf-devel
-BuildRequires:  kernel-devel
-BuildRequires:  libbpf-devel
+# Build dependencies (optional if building outside rpmbuild)
+# In CI, we build with Nix before rpmbuild
 BuildRequires:  systemd-rpm-macros
+
+# These are only needed if building from source within rpmbuild:
+# BuildRequires:  rust >= 1.70
+# BuildRequires:  cargo
+# BuildRequires:  clang
+# BuildRequires:  llvm
+# BuildRequires:  elfutils-libelf-devel
+# BuildRequires:  kernel-devel
+# BuildRequires:  libbpf-devel
 
 Requires:       wireguard-tools
 Requires:       NetworkManager
@@ -38,11 +42,13 @@ Features:
 %setup -q
 
 %build
-# Build eBPF program
-cargo xtask build-ebpf --release
-
-# Build daemon
-cargo build --release --package wg-ondemand
+# Build is done outside of rpmbuild by CI (using Nix)
+# This allows using nightly Rust for eBPF while keeping
+# stable Rust as a build dependency for rpm metadata
+test -f target/release/wg-ondemand || {
+    echo "Error: wg-ondemand binary not found. Build must be done before rpmbuild."
+    exit 1
+}
 
 %install
 # Create directories
