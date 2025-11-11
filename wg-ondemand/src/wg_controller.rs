@@ -19,7 +19,10 @@ fn validate_name(name: &str, field_name: &str) -> Result<()> {
     }
 
     // Check for valid characters: alphanumeric, hyphen, underscore
-    if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
         anyhow::bail!(
             "{} contains invalid characters: '{}'. Only alphanumeric, hyphens, and underscores are allowed",
             field_name,
@@ -200,7 +203,8 @@ impl WgController {
         let iface = self.wg_stats_interface();
 
         // Parse interface name for wireguard-control
-        let iface_name: InterfaceName = iface.parse()
+        let iface_name: InterfaceName = iface
+            .parse()
             .with_context(|| format!("Invalid interface name: {}", iface))?;
 
         // Use tokio::task::spawn_blocking for sync netlink call
