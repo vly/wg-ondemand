@@ -1,0 +1,53 @@
+[Unit]
+Description=WireGuard On-Demand Activation Daemon
+Documentation=https://github.com/vly/wg-ondemand
+After=network-online.target NetworkManager.service
+Wants=network-online.target
+ConditionPathExists=/etc/wg-ondemand/config.toml
+ConditionPathExists=/etc/wireguard/wg0.conf
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/wg-ondemand --config /etc/wg-ondemand/config.toml
+Restart=on-failure
+RestartSec=10
+
+# Capabilities required for eBPF and network management
+AmbientCapabilities=CAP_NET_ADMIN CAP_BPF CAP_PERFMON
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_BPF CAP_PERFMON
+
+# Security hardening
+User=root
+Group=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=false
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+
+# File system access
+ReadWritePaths=/sys/fs/bpf /sys/kernel/debug/tracing
+ReadOnlyPaths=/etc/wg-ondemand /etc/wireguard
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wg-ondemand
+
+[Install]
+WantedBy=multi-user.target

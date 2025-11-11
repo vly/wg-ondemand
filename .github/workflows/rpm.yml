@@ -1,0 +1,113 @@
+name: Build RPM
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-rpm:
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:latest
+
+    steps:
+    - name: Install build dependencies
+      run: |
+        dnf install -y \
+          git \
+          rpm-build \
+          rpmdevtools \
+          rust \
+          cargo \
+          clang \
+          llvm \
+          elfutils-libelf-devel \
+          kernel-devel \
+          libbpf-devel \
+          systemd-rpm-macros
+
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Add BPF target
+      run: rustup target add bpfel-unknown-none || true
+
+    - name: Set up RPM build tree
+      run: rpmdev-setuptree
+
+    - name: Get version
+      id: version
+      run: |
+        if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/v}
+        else
+          VERSION=$(grep '^Version:' wg-ondemand.spec | awk '{print $2}')
+        fi
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building version: $VERSION"
+
+    - name: Create source tarball
+      run: |
+        VERSION=${{ steps.version.outputs.VERSION }}
+        git archive --format=tar.gz --prefix=wg-ondemand-${VERSION}/ HEAD > ~/rpmbuild/SOURCES/wg-ondemand-${VERSION}.tar.gz
+
+    - name: Copy spec file
+      run: cp wg-ondemand.spec ~/rpmbuild/SPECS/
+
+    - name: Build source RPM
+      run: |
+        cd ~/rpmbuild/SPECS
+        rpmbuild -bs \
+          --define "version ${{ steps.version.outputs.VERSION }}" \
+          wg-ondemand.spec
+
+    - name: Build binary RPM
+      run: |
+        cd ~/rpmbuild/SPECS
+        rpmbuild -bb \
+          --define "version ${{ steps.version.outputs.VERSION }}" \
+          wg-ondemand.spec
+
+    - name: List built packages
+      run: |
+        echo "Source RPMs:"
+        ls -lh ~/rpmbuild/SRPMS/
+        echo ""
+        echo "Binary RPMs:"
+        ls -lh ~/rpmbuild/RPMS/x86_64/
+
+    - name: Test install RPM
+      run: |
+        dnf install -y ~/rpmbuild/RPMS/x86_64/wg-ondemand-*.rpm
+        which wg-ondemand
+        wg-ondemand --version || echo "Binary installed successfully"
+
+    - name: Upload RPM artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: rpm-packages-${{ steps.version.outputs.VERSION }}
+        path: |
+          ~/rpmbuild/RPMS/x86_64/*.rpm
+          ~/rpmbuild/SRPMS/*.rpm
+
+    - name: Upload to GitHub Release
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          ~/rpmbuild/RPMS/x86_64/*.rpm
+          ~/rpmbuild/SRPMS/*.rpm
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

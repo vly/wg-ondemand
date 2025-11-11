@@ -1,0 +1,29 @@
+# WireGuard On-Demand Activation Configuration
+
+[general]
+# SSID to monitor for activation
+target_ssid = "Plasticmice"
+
+# WireGuard interface to manage
+wg_interface = "Still-vlyt14"
+
+# NetworkManager connection name (if using NetworkManager instead of wg-quick)
+nm_connection = "Still-vlyt14"
+
+# Network interface to monitor (auto-detect if not specified)
+monitor_interface = "wlp194s0"
+
+# Idle timeout in seconds before deactivating tunnel
+idle_timeout = 300
+
+# Log level: trace, debug, info, warn, error
+log_level = "debug"
+
+[subnets]
+# Target subnets that trigger VPN activation
+# Format: CIDR notation
+ranges = [
+    "192.168.1.0/24",
+    "192.168.2.0/24",
+    "192.168.3.0/24"
+]
