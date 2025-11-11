@@ -1,4 +1,4 @@
-# WireGuard On-Demand
+# WireGuard On-Demand for Linux
 
 **Automatic VPN activation when you need it, idle when you don't.**
 
@@ -12,7 +12,9 @@ This daemon monitors your network traffic and automatically:
 - Automatically disconnects after 5 minutes of inactivity to save data
 - Minimal footprint for laptop scenario
 
-**Perfect for:** Accessing your home network while traveling, without keeping VPN active all the time.
+**Primary use case:** Accessing your home network while on the go (e.g. mobile hotspot), without keeping VPN active all the time.
+
+Tested on x86 Fedora 43, running on Lenovo Thinkpad t14s gen 6 AMD.
 
 ## Requirements
 
@@ -247,13 +249,6 @@ This daemon supports both connection methods:
 **wg-quick** (traditional):
 - Requires `/etc/wireguard/wg0.conf` file
 - Comment out `nm_connection` line in config
-
-## Technical Details
-
-For developers and those interested in how it works, see:
-- [CLAUDE.md](./CLAUDE.md) - Architecture and development guide
-- [PROJECT_OUTLINE.md](./PROJECT_OUTLINE.md) - Complete implementation details
-- [NOTES.md](./NOTES.md) - Design decisions
 
 **Technology:** Uses eBPF for efficient packet filtering, Rust for safety, D-Bus for NetworkManager integration.
 
