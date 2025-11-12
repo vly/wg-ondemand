@@ -27,6 +27,11 @@ jobs:
     - name: Install Nix
       uses: DeterminateSystems/nix-installer-action@main
 
+    - name: Cache Rust dependencies
+      uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: "rpm-cache"
+
     - name: Set up RPM build tree
       run: |
         mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}

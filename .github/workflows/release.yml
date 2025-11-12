@@ -22,6 +22,11 @@ jobs:
     - name: Install Nix
       uses: DeterminateSystems/nix-installer-action@main
 
+    - name: Cache Rust dependencies
+      uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: "release-cache"
+
     - name: Build eBPF program
       run: nix develop --command cargo xtask build-ebpf --release
 
