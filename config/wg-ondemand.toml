@@ -1,8 +1,28 @@
 # WireGuard On-Demand Activation Configuration
 
 [general]
-# SSID to monitor for activation
+# SSID filtering configuration
+#
+# Single SSID:
 target_ssid = "Plasticmice"
+#
+# Multiple target SSIDs (whitelist - only activate on these networks):
+# target_ssids = ["Plasticmice", "MyPhone", "CoffeeShop"]
+#
+# Exclude specific SSIDs (blacklist - activate on any network EXCEPT these):
+# exclude_ssids = ["HomeWiFi", "OfficeWiFi"]
+#
+# Monitor all networks (no filtering):
+# target_ssids = []
+# exclude_ssids = []
+# Note: IP collision detection will prevent activation when local IP
+# conflicts with configured subnet ranges
+#
+# Combined whitelist + blacklist:
+# target_ssids = ["Hotspot1", "Hotspot2"]
+# exclude_ssids = ["UnsafeHotspot"]
+#
+# Note: exclude_ssids takes precedence over target_ssids
 
 # WireGuard interface to manage
 wg_interface = "Still-vlyt14"

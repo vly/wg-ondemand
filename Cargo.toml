@@ -22,6 +22,7 @@ zbus = "4.0"
 clap = { version = "4", features = ["derive"] }
 futures = "0.3"
 wireguard-control = "1.7"
+if-addrs = "0.13"
 
 [profile.release]
 lto = true

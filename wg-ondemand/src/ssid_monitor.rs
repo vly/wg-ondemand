@@ -78,19 +78,25 @@ trait AccessPoint {
 
 /// SSID monitor
 pub struct SsidMonitor {
-    target_ssid: String,
+    target_ssids: Vec<String>,
+    exclude_ssids: Vec<String>,
     connection: Connection,
 }
 
 impl SsidMonitor {
     /// Create a new SSID monitor
-    pub async fn new(target_ssid: String) -> Result<Self> {
+    ///
+    /// # Arguments
+    /// * `target_ssids` - Whitelist of SSIDs to monitor. If empty, monitors all SSIDs.
+    /// * `exclude_ssids` - Blacklist of SSIDs to exclude. Takes precedence over target_ssids.
+    pub async fn new(target_ssids: Vec<String>, exclude_ssids: Vec<String>) -> Result<Self> {
         let connection = Connection::system()
             .await
             .context("Failed to connect to system D-Bus")?;
 
         Ok(Self {
-            target_ssid,
+            target_ssids,
+            exclude_ssids,
             connection,
         })
     }
@@ -151,10 +157,37 @@ impl SsidMonitor {
         Ok(Some(ssid))
     }
 
-    /// Check if connected to the target SSID
+    /// Check if connected to a monitored SSID (respecting whitelist/blacklist rules)
+    ///
+    /// Returns `true` if:
+    /// - Connected to WiFi network AND
+    /// - (target_ssids is empty OR current SSID is in target_ssids) AND
+    /// - Current SSID is NOT in exclude_ssids
     pub async fn is_connected_to_target(&self) -> Result<bool> {
         match self.current_ssid().await? {
-            Some(ssid) => Ok(ssid == self.target_ssid),
+            Some(ssid) => {
+                // First check blacklist (takes precedence)
+                if self.exclude_ssids.contains(&ssid) {
+                    log::debug!("SSID '{}' is in exclude list", ssid);
+                    return Ok(false);
+                }
+
+                // Then check whitelist
+                if self.target_ssids.is_empty() {
+                    // Empty whitelist means "all SSIDs" (except those excluded)
+                    log::debug!("SSID '{}' allowed (monitor all mode)", ssid);
+                    Ok(true)
+                } else {
+                    // Non-empty whitelist: must be in the list
+                    let is_target = self.target_ssids.contains(&ssid);
+                    if is_target {
+                        log::debug!("SSID '{}' is in target list", ssid);
+                    } else {
+                        log::debug!("SSID '{}' not in target list", ssid);
+                    }
+                    Ok(is_target)
+                }
+            }
             None => Ok(false),
         }
     }
@@ -166,9 +199,31 @@ impl SsidMonitor {
 
         let mut was_connected = self.is_connected_to_target().await?;
 
-        log::info!("Starting SSID monitor for '{}'", self.target_ssid);
+        // Log monitoring configuration
+        if self.target_ssids.is_empty() && self.exclude_ssids.is_empty() {
+            log::info!("Starting SSID monitor: monitoring ALL networks");
+        } else if self.target_ssids.is_empty() {
+            log::info!(
+                "Starting SSID monitor: monitoring all EXCEPT {:?}",
+                self.exclude_ssids
+            );
+        } else if self.exclude_ssids.is_empty() {
+            log::info!(
+                "Starting SSID monitor: monitoring ONLY {:?}",
+                self.target_ssids
+            );
+        } else {
+            log::info!(
+                "Starting SSID monitor: monitoring {:?} EXCEPT {:?}",
+                self.target_ssids,
+                self.exclude_ssids
+            );
+        }
+
         if was_connected {
-            log::info!("Already connected to target SSID");
+            if let Ok(Some(current)) = self.current_ssid().await {
+                log::info!("Already connected to monitored SSID: {}", current);
+            }
         }
 
         while let Some(_signal) = stream.next().await {
@@ -181,10 +236,12 @@ impl SsidMonitor {
             };
 
             if is_connected && !was_connected {
-                log::info!("Connected to target SSID: {}", self.target_ssid);
+                if let Ok(Some(current)) = self.current_ssid().await {
+                    log::info!("Connected to monitored SSID: {}", current);
+                }
                 let _ = tx.send(NetworkEvent::ConnectedToTarget).await;
             } else if !is_connected && was_connected {
-                log::info!("Disconnected from target SSID");
+                log::info!("Disconnected from monitored SSID");
                 let _ = tx.send(NetworkEvent::Disconnected).await;
             }
 
@@ -192,11 +249,6 @@ impl SsidMonitor {
         }
 
         Ok(())
-    }
-
-    /// Get the target SSID
-    pub fn target_ssid(&self) -> &str {
-        &self.target_ssid
     }
 }
 

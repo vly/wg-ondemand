@@ -8,7 +8,7 @@ use tokio::signal;
 use tokio::sync::mpsc;
 use tokio::time::interval;
 use wg_ondemand::{
-    config::load_config,
+    config::{self, load_config},
     ebpf_loader::EbpfManager,
     ssid_monitor::{NetworkEvent, SsidMonitor},
     state::{StateAction, StateCommand, StateManager},
@@ -39,6 +39,24 @@ struct Args {
     /// Path to configuration file
     #[arg(short, long, default_value = "/etc/wg-ondemand/config.toml")]
     config: PathBuf,
+}
+
+/// Get the IPv4 address assigned to a network interface
+/// Returns the IP as u32 in network byte order (big endian), or None if no IPv4 address assigned
+fn get_interface_ip(interface: &str) -> Result<Option<u32>> {
+    let interfaces = if_addrs::get_if_addrs()
+        .context("Failed to get interface addresses")?;
+
+    for iface in interfaces {
+        if iface.name == interface {
+            if let if_addrs::IfAddr::V4(ipv4) = iface.addr {
+                let ip_u32 = u32::from_be_bytes(ipv4.ip.octets());
+                return Ok(Some(ip_u32));
+            }
+        }
+    }
+
+    Ok(None)
 }
 
 /// Auto-detect the active network interface
@@ -144,7 +162,28 @@ async fn async_main() -> Result<()> {
     .init();
 
     log::info!("Starting wg-ondemand daemon");
-    log::info!("Target SSID: {}", config.general.target_ssid);
+
+    // Log SSID filtering configuration
+    if config.general.target_ssids.0.is_empty() && config.general.exclude_ssids.is_empty() {
+        log::info!("SSID filtering: monitoring ALL networks");
+    } else if config.general.target_ssids.0.is_empty() {
+        log::info!(
+            "SSID filtering: all networks EXCEPT {:?}",
+            config.general.exclude_ssids
+        );
+    } else if config.general.exclude_ssids.is_empty() {
+        log::info!(
+            "SSID filtering: ONLY {:?}",
+            config.general.target_ssids.0
+        );
+    } else {
+        log::info!(
+            "SSID filtering: {:?} EXCEPT {:?}",
+            config.general.target_ssids.0,
+            config.general.exclude_ssids
+        );
+    }
+
     log::info!("WireGuard interface: {}", config.general.wg_interface);
     log::info!("Idle timeout: {}s", config.general.idle_timeout);
     log::info!("Target subnets: {}", config.subnets.ranges.join(", "));
@@ -184,9 +223,12 @@ async fn async_main() -> Result<()> {
         .context("Failed to load eBPF program")?;
 
     // Create SSID monitor
-    let ssid_monitor = SsidMonitor::new(config.general.target_ssid.clone())
-        .await
-        .context("Failed to create SSID monitor")?;
+    let ssid_monitor = SsidMonitor::new(
+        config.general.target_ssids.0.clone(),
+        config.general.exclude_ssids.clone(),
+    )
+    .await
+    .context("Failed to create SSID monitor")?;
 
     // Channels for communication
     let (network_tx, mut network_rx) = mpsc::channel::<NetworkEvent>(NETWORK_EVENT_CHANNEL_SIZE);
@@ -199,13 +241,13 @@ async fn async_main() -> Result<()> {
     if initial_connected {
         if tunnel_already_up {
             log::info!(
-                "Already connected to target SSID and tunnel is up, transitioning to Active state"
+                "Already connected to monitored network and tunnel is up, transitioning to Active state"
             );
             // State sequence: Inactive -> Monitoring -> Active (tunnel already up)
             state_tx.send(StateCommand::StartMonitoring).await?;
             state_tx.send(StateCommand::TunnelAlreadyUp).await?;
         } else {
-            log::info!("Already connected to target SSID, starting monitoring");
+            log::info!("Already connected to monitored network, starting monitoring");
             state_tx.send(StateCommand::StartMonitoring).await?;
         }
     }
@@ -285,11 +327,44 @@ async fn async_main() -> Result<()> {
 
                 match action {
                     StateAction::AttachEbpf => {
-                        log::info!("Action: Attaching eBPF program");
-                        if let Err(e) = ebpf_manager.attach() {
-                            log::error!("Failed to attach eBPF: {}", e);
-                        } else {
-                            log::info!("eBPF program attached and monitoring traffic");
+                        // Check if local IP conflicts with configured subnets
+                        match get_interface_ip(&monitor_iface) {
+                            Ok(Some(local_ip)) => {
+                                // Check if local IP is within any configured subnet
+                                match config::ip_in_subnets(local_ip, &config.subnets.ranges) {
+                                    Ok(true) => {
+                                        let ip_bytes = local_ip.to_be_bytes();
+                                        log::warn!(
+                                            "Local IP {}.{}.{}.{} conflicts with configured subnet ranges. \
+                                            Skipping eBPF attachment to avoid routing loops. \
+                                            This network appears to use the same IP range as your home network.",
+                                            ip_bytes[0], ip_bytes[1], ip_bytes[2], ip_bytes[3]
+                                        );
+                                        // Don't attach eBPF - would cause routing issues
+                                    }
+                                    Ok(false) => {
+                                        // Safe to attach - local IP doesn't conflict
+                                        log::info!("Action: Attaching eBPF program");
+                                        if let Err(e) = ebpf_manager.attach() {
+                                            log::error!("Failed to attach eBPF: {}", e);
+                                        } else {
+                                            log::info!("eBPF program attached and monitoring traffic");
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to check IP subnet overlap: {}", e);
+                                    }
+                                }
+                            }
+                            Ok(None) => {
+                                log::warn!(
+                                    "Interface {} has no IPv4 address yet. Skipping eBPF attachment.",
+                                    monitor_iface
+                                );
+                            }
+                            Err(e) => {
+                                log::error!("Failed to get interface IP: {}", e);
+                            }
                         }
                     }
 

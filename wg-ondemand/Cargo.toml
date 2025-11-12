@@ -16,6 +16,7 @@ zbus.workspace = true
 clap.workspace = true
 futures.workspace = true
 wireguard-control.workspace = true
+if-addrs.workspace = true
 
 [lib]
 name = "wg_ondemand"
