@@ -27,9 +27,6 @@ jobs:
     - name: Install Nix
       uses: DeterminateSystems/nix-installer-action@main
 
-    - name: Setup Nix cache
-      uses: DeterminateSystems/magic-nix-cache-action@main
-
     - name: Set up RPM build tree
       run: |
         mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}

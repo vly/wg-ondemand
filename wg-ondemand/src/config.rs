@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn test_validate_config() {
-        use crate::types::{GeneralConfig, SubnetConfig, SsidList};
+        use crate::types::{GeneralConfig, SsidList, SubnetConfig};
 
         // Valid config with target SSID
         let config = Config {

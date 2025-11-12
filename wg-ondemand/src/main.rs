@@ -44,8 +44,7 @@ struct Args {
 /// Get the IPv4 address assigned to a network interface
 /// Returns the IP as u32 in network byte order (big endian), or None if no IPv4 address assigned
 fn get_interface_ip(interface: &str) -> Result<Option<u32>> {
-    let interfaces = if_addrs::get_if_addrs()
-        .context("Failed to get interface addresses")?;
+    let interfaces = if_addrs::get_if_addrs().context("Failed to get interface addresses")?;
 
     for iface in interfaces {
         if iface.name == interface {
@@ -172,10 +171,7 @@ async fn async_main() -> Result<()> {
             config.general.exclude_ssids
         );
     } else if config.general.exclude_ssids.is_empty() {
-        log::info!(
-            "SSID filtering: ONLY {:?}",
-            config.general.target_ssids.0
-        );
+        log::info!("SSID filtering: ONLY {:?}", config.general.target_ssids.0);
     } else {
         log::info!(
             "SSID filtering: {:?} EXCEPT {:?}",
