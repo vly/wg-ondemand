@@ -1,53 +1,42 @@
 [Unit]
-Description=WireGuard On-Demand Activation Daemon
+Description=WireGuard On-Demand VPN Daemon
 Documentation=https://github.com/vly/wg-ondemand
 After=network-online.target NetworkManager.service
 Wants=network-online.target
-ConditionPathExists=/etc/wg-ondemand/config.toml
-ConditionPathExists=/etc/wireguard/wg0.conf
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/wg-ondemand --config /etc/wg-ondemand/config.toml
+# Setup TC qdisc before starting daemon
+ExecStartPre=/usr/local/bin/wg-ondemand-setup-tc /etc/wg-ondemand/config.toml
+ExecStart=/usr/local/bin/wg-ondemand -c /etc/wg-ondemand/config.toml
 Restart=on-failure
-RestartSec=10
+RestartSec=5s
 
-# Capabilities required for eBPF and network management
-AmbientCapabilities=CAP_NET_ADMIN CAP_BPF CAP_PERFMON
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_BPF CAP_PERFMON
-
-# Security hardening
+# User and group (run as root for BPF and network management capabilities)
 User=root
 Group=root
+
+# Security hardening
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
+ReadWritePaths=/var/log
 ProtectKernelTunables=false
 ProtectKernelModules=true
-ProtectKernelLogs=true
 ProtectControlGroups=true
-ProtectClock=true
-ProtectHostname=true
-RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
-RestrictNamespaces=true
 RestrictRealtime=true
 RestrictSUIDSGID=true
 LockPersonality=true
 MemoryDenyWriteExecute=false
-SystemCallArchitectures=native
-SystemCallFilter=@system-service
-SystemCallFilter=~@privileged @resources
-SystemCallErrorNumber=EPERM
 
-# File system access
-ReadWritePaths=/sys/fs/bpf /sys/kernel/debug/tracing
-ReadOnlyPaths=/etc/wg-ondemand /etc/wireguard
+# Required capabilities for eBPF and network management
+AmbientCapabilities=CAP_NET_ADMIN CAP_BPF CAP_PERFMON CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_BPF CAP_PERFMON CAP_NET_RAW
 
-# Logging
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=wg-ondemand
+# Resource limits
+LimitNOFILE=65536
+TasksMax=256
 
 [Install]
 WantedBy=multi-user.target

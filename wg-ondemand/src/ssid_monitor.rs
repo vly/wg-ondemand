@@ -6,7 +6,7 @@
 //! detecting when the system connects to or disconnects from the target SSID.
 
 use anyhow::{Context, Result};
-use futures::stream::StreamExt;
+use futures_util::stream::StreamExt;
 use tokio::sync::mpsc;
 use zbus::{proxy, Connection};
 

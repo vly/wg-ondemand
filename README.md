@@ -21,27 +21,27 @@ Tested on Fedora 43, Lenovo ThinkPad T14s Gen 6 AMD.
 
 ## Install
 
-### Fedora/RHEL (Recommended)
+### Quick Install (Recommended)
 
 ```bash
-# Enable repository
-sudo dnf copr enable vly/wg-ondemand
+curl -fsSL https://raw.githubusercontent.com/vly/wg-ondemand/main/scripts/quick-install.sh | sudo bash
+```
 
-# Install
+### Fedora/RHEL
+
+```bash
+sudo dnf copr enable vly/wg-ondemand
 sudo dnf install wg-ondemand
 ```
 
-### Other Distributions
+### Manual Install
 
-Download the latest release from [GitHub Releases](https://github.com/vly/wg-ondemand/releases):
+Download from [GitHub Releases](https://github.com/vly/wg-ondemand/releases):
 
 ```bash
-# Download and extract
 wget https://github.com/vly/wg-ondemand/releases/latest/download/wg-ondemand-v0.1.0.tar.gz
 tar xzf wg-ondemand-v0.1.0.tar.gz
 cd wg-ondemand-v0.1.0/
-
-# Install
 sudo ./install.sh
 ```
 
@@ -50,79 +50,53 @@ sudo ./install.sh
 ```bash
 git clone https://github.com/vly/wg-ondemand
 cd wg-ondemand
-sudo ./install.sh
+sudo ./scripts/install.sh
 ```
 
 ## Getting Started
 
-1. **Configure** `/etc/wg-ondemand/config.toml`:
+After installation, configure and start the service:
+
+```bash
+# 1. Edit configuration
+sudo wg-ondemand-ctl config edit
+
+# 2. Enable and start
+sudo wg-ondemand-ctl enable
+sudo wg-ondemand-ctl start
+
+# 3. Check status
+wg-ondemand-ctl status
+```
+
+**Configuration example** (`/etc/wg-ondemand/config.toml`):
 
 ```toml
 [general]
-# WiFi networks to monitor
-# Option 1: Single WiFi network
+# Single WiFi network
 target_ssid = "MyPhoneHotspot"
 
-# Option 2: Multiple networks
+# Or multiple networks:
 # target_ssids = ["MyPhoneHotspot", "CoffeeShopWiFi"]
 
-# Option 3: All networks except home/office
+# Or exclude specific networks:
 # exclude_ssids = ["HomeWiFi", "OfficeWiFi"]
 
-# Your WireGuard interface
 wg_interface = "wg0"
-
-# NetworkManager connection name (comment out if using wg-quick)
-nm_connection = "HomeVPN"
-
-# Idle timeout in seconds
+nm_connection = "HomeVPN"  # Or comment out if using wg-quick
 idle_timeout = 300
 
 [subnets]
-# Home networks that trigger VPN activation
-ranges = [
-    "192.168.1.0/24",
-    "10.0.0.0/24",
-]
+ranges = ["192.168.1.0/24", "10.0.0.0/24"]
 ```
 
-2. **Start the service:**
+**Common commands:**
 
 ```bash
-sudo systemctl enable --now wg-ondemand
-```
-
-3. **Test it:**
-
-```bash
-# Connect to your target WiFi
-# Try to access your home network
-ping 192.168.1.1
-
-# Watch it activate automatically
-sudo journalctl -u wg-ondemand -f
-```
-
-That's it. The daemon runs in the background and handles everything automatically.
-
-**View logs:**
-```bash
-sudo journalctl -u wg-ondemand -f
-```
-
-**Restart after config changes:**
-```bash
-sudo systemctl restart wg-ondemand
-```
-
-**Uninstall:**
-```bash
-sudo systemctl stop wg-ondemand
-sudo systemctl disable wg-ondemand
-sudo rm /usr/local/bin/wg-ondemand
-sudo rm /etc/systemd/system/wg-ondemand.service
-sudo rm -rf /etc/wg-ondemand
-sudo systemctl daemon-reload
+wg-ondemand-ctl status          # Show status
+wg-ondemand-ctl logs -f         # Follow logs
+sudo wg-ondemand-ctl restart    # Restart after config changes
+sudo wg-ondemand-ctl uninstall  # Remove wg-ondemand
 ```
 
 ## Bugs and Contributing
