@@ -18,6 +18,13 @@ cargo build --release
 echo "Installing binaries to /usr/local/bin..."
 install -m 755 target/release/wg-ondemand /usr/local/bin/wg-ondemand
 install -m 755 scripts/setup-tc.sh /usr/local/bin/wg-ondemand-setup-tc
+install -m 755 scripts/wg-ondemand-ctl /usr/local/bin/wg-ondemand-ctl
+
+# Create shared directory for scripts
+echo "Installing helper scripts..."
+mkdir -p /usr/local/share/wg-ondemand
+install -m 755 scripts/install.sh /usr/local/share/wg-ondemand/install.sh
+install -m 755 scripts/uninstall.sh /usr/local/share/wg-ondemand/uninstall.sh
 
 # Create config directory
 echo "Creating config directory..."
@@ -34,7 +41,7 @@ fi
 
 # Install systemd service
 echo "Installing systemd service..."
-install -m 644 wg-ondemand.service /etc/systemd/system/wg-ondemand.service
+install -m 644 systemd/wg-ondemand.service /etc/systemd/system/wg-ondemand.service
 
 # Reload systemd
 echo "Reloading systemd daemon..."
@@ -44,10 +51,13 @@ echo ""
 echo "✅ Installation complete!"
 echo ""
 echo "Next steps:"
-echo "  1. Edit configuration: sudo nano /etc/wg-ondemand/config.toml"
+echo "  1. Edit configuration: sudo wg-ondemand-ctl config edit"
 echo "  2. Ensure WireGuard config exists: /etc/wireguard/wg0.conf"
-echo "  3. Enable service: sudo systemctl enable wg-ondemand"
-echo "  4. Start service: sudo systemctl start wg-ondemand"
-echo "  5. Check status: sudo systemctl status wg-ondemand"
-echo "  6. View logs: sudo journalctl -u wg-ondemand -f"
+echo "  3. Enable and start: sudo wg-ondemand-ctl enable && sudo wg-ondemand-ctl start"
+echo "  4. Check status: wg-ondemand-ctl status"
+echo ""
+echo "Quick commands:"
+echo "  wg-ondemand-ctl status       - Show service status"
+echo "  wg-ondemand-ctl logs -f      - Follow logs"
+echo "  sudo wg-ondemand-ctl restart - Restart after config changes"
 echo ""

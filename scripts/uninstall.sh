@@ -34,6 +34,13 @@ if [ -f /usr/local/bin/wg-ondemand ]; then
     echo "Removing binaries..."
     rm -f /usr/local/bin/wg-ondemand
     rm -f /usr/local/bin/wg-ondemand-setup-tc
+    rm -f /usr/local/bin/wg-ondemand-ctl
+fi
+
+# Remove shared scripts
+if [ -d /usr/local/share/wg-ondemand ]; then
+    echo "Removing helper scripts..."
+    rm -rf /usr/local/share/wg-ondemand
 fi
 
 # Ask about config files

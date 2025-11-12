@@ -64,7 +64,7 @@ install -m 755 scripts/setup-tc.sh %{buildroot}%{_bindir}/wg-ondemand-setup-tc
 install -m 644 config/wg-ondemand.toml %{buildroot}%{_sysconfdir}/wg-ondemand/config.toml
 
 # Install systemd service
-install -m 644 wg-ondemand.service %{buildroot}%{_unitdir}/wg-ondemand.service
+install -m 644 systemd/wg-ondemand.service %{buildroot}%{_unitdir}/wg-ondemand.service
 
 %post
 %systemd_post wg-ondemand.service

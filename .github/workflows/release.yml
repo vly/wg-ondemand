@@ -51,21 +51,23 @@ jobs:
         # Copy binaries from cargo build
         cp target/release/wg-ondemand ${RELEASE_DIR}/bin/
         cp scripts/setup-tc.sh ${RELEASE_DIR}/bin/wg-ondemand-setup-tc
+        cp scripts/wg-ondemand-ctl ${RELEASE_DIR}/bin/wg-ondemand-ctl
         chmod +x ${RELEASE_DIR}/bin/*
 
         # Copy scripts
-        cp install.sh ${RELEASE_DIR}/
-        cp uninstall.sh ${RELEASE_DIR}/
+        cp scripts/install.sh ${RELEASE_DIR}/
+        cp scripts/uninstall.sh ${RELEASE_DIR}/
         chmod +x ${RELEASE_DIR}/*.sh
 
         # Copy config
         cp config/wg-ondemand.toml ${RELEASE_DIR}/config/wg-ondemand.toml.example
 
         # Copy systemd service
-        cp wg-ondemand.service ${RELEASE_DIR}/systemd/
+        cp systemd/wg-ondemand.service ${RELEASE_DIR}/systemd/
 
         # Copy documentation
         cp README.md ${RELEASE_DIR}/docs/
+        cp docs/*.md ${RELEASE_DIR}/docs/
 
         # Create installation README
         cat > ${RELEASE_DIR}/INSTALL.md << 'EOF'

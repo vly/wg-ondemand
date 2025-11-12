@@ -50,6 +50,6 @@ jobs:
 
     - name: Verify scripts are executable
       run: |
-        test -x install.sh
-        test -x uninstall.sh
+        test -x scripts/install.sh
+        test -x scripts/uninstall.sh
         test -x scripts/setup-tc.sh
