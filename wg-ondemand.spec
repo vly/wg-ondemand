@@ -59,6 +59,7 @@ install -d %{buildroot}%{_unitdir}
 # Install binaries
 install -m 755 target/release/wg-ondemand %{buildroot}%{_bindir}/wg-ondemand
 install -m 755 scripts/setup-tc.sh %{buildroot}%{_bindir}/wg-ondemand-setup-tc
+install -m 755 scripts/wg-ondemand-ctl %{buildroot}%{_bindir}/wg-ondemand-ctl
 
 # Install configuration
 install -m 644 config/wg-ondemand.toml %{buildroot}%{_sysconfdir}/wg-ondemand/config.toml
@@ -76,7 +77,7 @@ cat <<'EOF'
   WireGuard On-Demand has been installed!
 
   IMPORTANT: Edit the configuration file before starting the service:
-    sudo nano /etc/wg-ondemand/config.toml
+    sudo wg-ondemand-ctl config edit
 
   Configure these settings:
     - target_ssid: Your hotspot SSID
@@ -85,14 +86,14 @@ cat <<'EOF'
     - ranges: Target subnets that trigger VPN activation
 
   Then enable and start the service:
-    sudo systemctl enable wg-ondemand
-    sudo systemctl start wg-ondemand
+    sudo wg-ondemand-ctl enable
+    sudo wg-ondemand-ctl start
 
   Check status:
-    sudo systemctl status wg-ondemand
+    wg-ondemand-ctl status
 
   View logs:
-    sudo journalctl -u wg-ondemand -f
+    wg-ondemand-ctl logs -f
 ================================================================================
 
 EOF
@@ -108,6 +109,7 @@ EOF
 %doc README.md CHANGELOG.md
 %{_bindir}/wg-ondemand
 %{_bindir}/wg-ondemand-setup-tc
+%{_bindir}/wg-ondemand-ctl
 %config(noreplace) %{_sysconfdir}/wg-ondemand/config.toml
 %{_unitdir}/wg-ondemand.service
 

@@ -102,7 +102,7 @@ jobs:
     - name: Verify RPM contents
       run: |
         nix-shell -p rpm --run "
-          rpm -qpl ~/rpmbuild/RPMS/x86_64/wg-ondemand-*.rpm
+          rpm -qp --list ~/rpmbuild/RPMS/x86_64/wg-ondemand-*.rpm
         "
 
     - name: Copy RPM artifacts to workspace
