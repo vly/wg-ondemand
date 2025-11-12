@@ -2,279 +2,135 @@
 
 **Automatic VPN activation when you need it, idle when you don't.**
 
-A lightweight daemon that automatically activates your WireGuard VPN tunnel only when accessing specific networks, saving mobile data and battery life.
+## What is it?
 
-## What is this?
+Access your home network while on the go without draining your mobile data or battery.
 
-This daemon monitors your network traffic and automatically:
-- Activates your WireGuard VPN when you try to access your home/private network
-- Only works when connected to a specific WiFi (e.g., your mobile hotspot)
-- Automatically disconnects after 5 minutes of inactivity to save data
-- Minimal footprint for laptop scenario
+This daemon automatically activates your WireGuard VPN only when you actually try to access your home network, then disconnects after 5 minutes of inactivity. No manual toggling, no wasted mobile data when you're just browsing.
 
-**Primary use case:** Accessing your home network while on the go (e.g. mobile hotspot), without keeping VPN active all the time.
+**The problem it solves:** You're on your phone's hotspot and want to access your home server. Normally you'd need to manually connect to VPN, remember to disconnect when done, or waste data keeping it connected all the time.
 
-Tested on x86 Fedora 43, running on Lenovo Thinkpad t14s gen 6 AMD.
+**What this does:** Automatically activates VPN the moment you try to access your home network (e.g., `ssh homeserver`), then disconnects automatically when you stop using it.
 
-## Requirements
+**Requirements:**
+- Linux kernel 5.8+ (check: `uname -r`)
+- NetworkManager
+- WireGuard configured
 
-- Linux with kernel 5.8 or newer
-- NetworkManager (standard on most modern Linux distributions)
-- WireGuard installed and configured
-- Root/sudo access for installation
+Tested on Fedora 43, Lenovo ThinkPad T14s Gen 6 AMD.
 
-**Check if your system is compatible:**
-```bash
-uname -r  # Should show 5.8 or higher
-```
+## Install
 
-## Quick Install
-
-### Option 1: Fedora/RHEL via DNF (Easiest!)
-
-**For Fedora 38+ users:**
+### Fedora/RHEL (Recommended)
 
 ```bash
-# Enable COPR repository
+# Enable repository
 sudo dnf copr enable vly/wg-ondemand
 
 # Install
 sudo dnf install wg-ondemand
-
-# Configure
-sudo nano /etc/wg-ondemand/config.toml
-
-# Enable and start
-sudo systemctl enable wg-ondemand
-sudo systemctl start wg-ondemand
 ```
 
-Updates are automatic via `dnf update`!
+### Other Distributions
 
-### Option 2: Download Pre-built Release
+Download the latest release from [GitHub Releases](https://github.com/vly/wg-ondemand/releases):
 
-1. **Download the latest release:**
-   ```bash
-   # Download latest release
-   wget https://github.com/vly/wg-ondemand/releases/latest/download/wg-ondemand-v0.1.0.tar.gz
+```bash
+# Download and extract
+wget https://github.com/vly/wg-ondemand/releases/latest/download/wg-ondemand-v0.1.0.tar.gz
+tar xzf wg-ondemand-v0.1.0.tar.gz
+cd wg-ondemand-v0.1.0/
 
-   # Verify checksum (optional but recommended)
-   wget https://github.com/vly/wg-ondemand/releases/latest/download/wg-ondemand-v0.1.0.tar.gz.sha256
-   sha256sum -c wg-ondemand-v0.1.0.tar.gz.sha256
+# Install
+sudo ./install.sh
+```
 
-   # Extract
-   tar xzf wg-ondemand-v0.1.0.tar.gz
-   cd wg-ondemand-v0.1.0/
-   ```
+### Build from Source
 
-2. **Install (requires sudo):**
-   ```bash
-   sudo ./install.sh
-   ```
+```bash
+git clone https://github.com/vly/wg-ondemand
+cd wg-ondemand
+sudo ./install.sh
+```
 
-### Option 3: Build from Source
+## Getting Started
 
-1. **Clone and build:**
-   ```bash
-   git clone https://github.com/vly/wg-ondemand
-   cd wg-ondemand
-   ```
-
-2. **Install (requires sudo):**
-   ```bash
-   sudo ./install.sh
-   ```
-
-3. **Edit configuration:**
-   ```bash
-   sudo nano /etc/wg-ondemand/config.toml
-   ```
-
-   Update these settings:
-   - `target_ssid`: WiFi name that triggers monitoring (e.g., "MyHotspot")
-   - `nm_connection`: Your WireGuard connection name (or comment out if using wg-quick)
-   - `wg_interface`: WireGuard interface name (usually "wg0")
-   - `ranges`: Networks that should trigger VPN activation (e.g., "192.168.1.0/24")
-
-4. **Start the service:**
-   ```bash
-   sudo systemctl enable wg-ondemand
-   sudo systemctl start wg-ondemand
-   ```
-
-Done! The daemon is now running.
-
-## Configuration Example
+1. **Configure** `/etc/wg-ondemand/config.toml`:
 
 ```toml
 [general]
-# WiFi network where on-demand activation should work
+# WiFi networks to monitor
+# Option 1: Single WiFi network
 target_ssid = "MyPhoneHotspot"
+
+# Option 2: Multiple networks
+# target_ssids = ["MyPhoneHotspot", "CoffeeShopWiFi"]
+
+# Option 3: All networks except home/office
+# exclude_ssids = ["HomeWiFi", "OfficeWiFi"]
 
 # Your WireGuard interface
 wg_interface = "wg0"
 
-# NetworkManager connection name (if using NetworkManager)
-# Comment out this line if using wg-quick instead
+# NetworkManager connection name (comment out if using wg-quick)
 nm_connection = "HomeVPN"
 
-# How long to wait before disconnecting (seconds)
+# Idle timeout in seconds
 idle_timeout = 300
 
-# Logging level: info, debug, warn, error
-log_level = "info"
-
 [subnets]
-# Networks that trigger VPN activation
+# Home networks that trigger VPN activation
 ranges = [
-    "192.168.1.0/24",  # Home network
-    "10.0.0.0/24",     # Home server subnet
+    "192.168.1.0/24",
+    "10.0.0.0/24",
 ]
 ```
 
-## Usage
+2. **Start the service:**
 
-The daemon runs automatically in the background. You don't need to do anything!
-
-**How it works:**
-1. Connect to your target WiFi (e.g., "MyPhoneHotspot")
-2. Try to access a device on your home network (e.g., `ping 192.168.1.1`)
-3. VPN automatically activates within 1-2 seconds
-4. Access your resources normally
-5. Stop using home network resources
-6. After 5 minutes of idle time, VPN automatically disconnects
-
-**View status:**
 ```bash
-# Check if daemon is running
-sudo systemctl status wg-ondemand
+sudo systemctl enable --now wg-ondemand
+```
 
-# View live logs
+3. **Test it:**
+
+```bash
+# Connect to your target WiFi
+# Try to access your home network
+ping 192.168.1.1
+
+# Watch it activate automatically
 sudo journalctl -u wg-ondemand -f
-
-# Check recent activity
-sudo journalctl -u wg-ondemand --since "1 hour ago"
 ```
 
-## Managing the Service
+That's it. The daemon runs in the background and handles everything automatically.
 
+**View logs:**
 ```bash
-# Start daemon
-sudo systemctl start wg-ondemand
+sudo journalctl -u wg-ondemand -f
+```
 
-# Stop daemon
-sudo systemctl stop wg-ondemand
-
-# Restart (after changing config)
+**Restart after config changes:**
+```bash
 sudo systemctl restart wg-ondemand
-
-# Enable automatic start on boot
-sudo systemctl enable wg-ondemand
-
-# Disable automatic start
-sudo systemctl disable wg-ondemand
 ```
 
-## Uninstall
-
+**Uninstall:**
 ```bash
-# Stop and disable the service
 sudo systemctl stop wg-ondemand
 sudo systemctl disable wg-ondemand
-
-# Remove installed files
 sudo rm /usr/local/bin/wg-ondemand
 sudo rm /etc/systemd/system/wg-ondemand.service
 sudo rm -rf /etc/wg-ondemand
-
-# Reload systemd
 sudo systemctl daemon-reload
 ```
 
-## Troubleshooting
+## Bugs and Contributing
 
-### VPN isn't activating
+**Found a bug?** [Open an issue](https://github.com/vly/wg-ondemand/issues)
 
-1. **Check you're connected to the right WiFi:**
-   ```bash
-   nmcli -t -f active,ssid dev wifi | grep '^yes'
-   ```
-   Should show your `target_ssid`.
+**Want to contribute?** Pull requests welcome! Please test thoroughly and include documentation.
 
-2. **Verify daemon is running:**
-   ```bash
-   sudo systemctl status wg-ondemand
-   ```
+**Technology:** eBPF for efficient packet filtering, Rust for safety, D-Bus for NetworkManager integration.
 
-3. **Check logs for errors:**
-   ```bash
-   sudo journalctl -u wg-ondemand -n 50
-   ```
-
-4. **Test WireGuard manually:**
-   ```bash
-   # If using NetworkManager:
-   sudo nmcli connection up YourConnectionName
-
-   # If using wg-quick:
-   sudo wg-quick up wg0
-   ```
-
-### VPN won't disconnect
-
-- Check idle timeout setting in `/etc/wg-ondemand/config.toml`
-- Make sure you've actually stopped accessing home resources
-- View logs: `sudo journalctl -u wg-ondemand -f`
-
-### Daemon won't start after crash
-
-If the daemon was killed unexpectedly (e.g., power loss, SIGKILL), stale eBPF programs may remain attached to the network interface. The daemon automatically cleans these up on startup, but if you need to clean up manually:
-
-```bash
-# Replace 'wlan0' with your network interface name
-sudo tc filter del dev wlan0 egress
-
-# Then restart the daemon
-sudo systemctl restart wg-ondemand
-```
-
-To find your network interface name:
-```bash
-ip link show
-# or
-nmcli device status
-```
-
-### Need more help?
-
-Enable debug logging:
-```bash
-sudo nano /etc/wg-ondemand/config.toml
-# Change: log_level = "debug"
-
-sudo systemctl restart wg-ondemand
-sudo journalctl -u wg-ondemand -f
-```
-
-## NetworkManager vs wg-quick
-
-This daemon supports both connection methods:
-
-**NetworkManager** (recommended):
-- Easier to set up
-- Better desktop integration
-- Set `nm_connection = "YourConnectionName"` in config
-
-**wg-quick** (traditional):
-- Requires `/etc/wireguard/wg0.conf` file
-- Comment out `nm_connection` line in config
-
-**Technology:** Uses eBPF for efficient packet filtering, Rust for safety, D-Bus for NetworkManager integration.
-
-## License
-
-MIT License - See LICENSE file
-
-## Contributing
-
-Contributions welcome! Please test thoroughly and include appropriate documentation.
+**License:** MIT - See LICENSE file

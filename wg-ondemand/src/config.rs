@@ -23,9 +23,24 @@ pub fn load_config<P: AsRef<Path>>(path: P) -> Result<Config> {
 
 /// Validate configuration values
 fn validate_config(config: &Config) -> Result<()> {
-    // Validate SSID not empty
-    if config.general.target_ssid.is_empty() {
-        anyhow::bail!("target_ssid cannot be empty");
+    // Validate SSID lists
+    // Check for SSIDs that appear in both target and exclude lists
+    for ssid in &config.general.target_ssids.0 {
+        if config.general.exclude_ssids.contains(ssid) {
+            anyhow::bail!(
+                "SSID '{}' appears in both target_ssids and exclude_ssids",
+                ssid
+            );
+        }
+    }
+
+    // Warn if both lists are empty (monitor on all networks mode)
+    if config.general.target_ssids.0.is_empty() && config.general.exclude_ssids.is_empty() {
+        log::warn!(
+            "No SSID filtering configured (target_ssids and exclude_ssids both empty). \
+            Will monitor on ALL networks. IP collision detection will prevent issues \
+            when on networks with same subnet as configured ranges."
+        );
     }
 
     // Validate WireGuard interface name
@@ -57,6 +72,24 @@ fn validate_config(config: &Config) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Check if an IP address falls within any of the configured subnet ranges
+///
+/// # Arguments
+/// * `ip` - IP address as u32 (network byte order / big endian)
+/// * `subnet_cidrs` - List of CIDR strings (e.g., ["192.168.1.0/24"])
+///
+/// # Returns
+/// `true` if the IP is within any subnet, `false` otherwise
+pub fn ip_in_subnets(ip: u32, subnet_cidrs: &[String]) -> Result<bool> {
+    for cidr in subnet_cidrs {
+        let (network, mask) = parse_cidr(cidr)?;
+        if (ip & mask) == network {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// Parse CIDR notation into (network, mask) tuple
@@ -93,6 +126,7 @@ pub fn parse_cidr(cidr: &str) -> Result<(u32, u32)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::SsidList;
 
     #[test]
     fn test_parse_cidr() {
@@ -123,12 +157,13 @@ mod tests {
 
     #[test]
     fn test_validate_config() {
-        use crate::types::{GeneralConfig, SubnetConfig};
+        use crate::types::{GeneralConfig, SsidList, SubnetConfig};
 
-        // Valid config
+        // Valid config with target SSID
         let config = Config {
             general: GeneralConfig {
-                target_ssid: "TestSSID".to_string(),
+                target_ssids: SsidList(vec!["TestSSID".to_string()]),
+                exclude_ssids: vec![],
                 wg_interface: "wg0".to_string(),
                 nm_connection: None,
                 monitor_interface: None,
@@ -141,9 +176,16 @@ mod tests {
         };
         assert!(validate_config(&config).is_ok());
 
-        // Empty SSID
+        // Valid config with empty SSID lists (monitor all networks)
+        let mut all_networks_config = config.clone();
+        all_networks_config.general.target_ssids = SsidList(vec![]);
+        all_networks_config.general.exclude_ssids = vec![];
+        assert!(validate_config(&all_networks_config).is_ok());
+
+        // Invalid: SSID in both lists
         let mut bad_config = config.clone();
-        bad_config.general.target_ssid = "".to_string();
+        bad_config.general.target_ssids = SsidList(vec!["TestSSID".to_string()]);
+        bad_config.general.exclude_ssids = vec!["TestSSID".to_string()];
         assert!(validate_config(&bad_config).is_err());
 
         // Zero timeout
@@ -155,6 +197,31 @@ mod tests {
         let mut bad_config = config.clone();
         bad_config.subnets.ranges = vec!["invalid".to_string()];
         assert!(validate_config(&bad_config).is_err());
+    }
+
+    #[test]
+    fn test_ip_in_subnets() {
+        let subnets = vec!["192.168.1.0/24".to_string(), "10.0.0.0/8".to_string()];
+
+        // Test IP in first subnet
+        let ip = u32::from_be_bytes([192, 168, 1, 50]);
+        assert!(ip_in_subnets(ip, &subnets).unwrap());
+
+        // Test IP in second subnet
+        let ip = u32::from_be_bytes([10, 20, 30, 40]);
+        assert!(ip_in_subnets(ip, &subnets).unwrap());
+
+        // Test IP not in any subnet
+        let ip = u32::from_be_bytes([172, 16, 0, 1]);
+        assert!(!ip_in_subnets(ip, &subnets).unwrap());
+
+        // Test edge case: network address itself
+        let ip = u32::from_be_bytes([192, 168, 1, 0]);
+        assert!(ip_in_subnets(ip, &subnets).unwrap());
+
+        // Test edge case: broadcast address
+        let ip = u32::from_be_bytes([192, 168, 1, 255]);
+        assert!(ip_in_subnets(ip, &subnets).unwrap());
     }
 
     #[test]
@@ -179,7 +246,8 @@ mod tests {
 
         let config = Config {
             general: GeneralConfig {
-                target_ssid: "TestSSID".to_string(),
+                target_ssids: SsidList(vec!["TestSSID".to_string()]),
+                exclude_ssids: vec![],
                 wg_interface: "wg0".to_string(),
                 nm_connection: None,
                 monitor_interface: None,
@@ -198,7 +266,8 @@ mod tests {
 
         let config = Config {
             general: GeneralConfig {
-                target_ssid: "TestSSID".to_string(),
+                target_ssids: SsidList(vec!["TestSSID".to_string()]),
+                exclude_ssids: vec![],
                 wg_interface: "wg0".to_string(),
                 nm_connection: None,
                 monitor_interface: None,
@@ -220,7 +289,8 @@ mod tests {
         // Exactly 16 subnets should be allowed
         let config = Config {
             general: GeneralConfig {
-                target_ssid: "TestSSID".to_string(),
+                target_ssids: SsidList(vec!["TestSSID".to_string()]),
+                exclude_ssids: vec![],
                 wg_interface: "wg0".to_string(),
                 nm_connection: None,
                 monitor_interface: None,
@@ -242,7 +312,8 @@ mod tests {
         // Overlapping subnets should be allowed (eBPF will handle)
         let config = Config {
             general: GeneralConfig {
-                target_ssid: "TestSSID".to_string(),
+                target_ssids: SsidList(vec!["TestSSID".to_string()]),
+                exclude_ssids: vec![],
                 wg_interface: "wg0".to_string(),
                 nm_connection: None,
                 monitor_interface: None,
@@ -266,7 +337,8 @@ mod tests {
 
         let base_config = Config {
             general: GeneralConfig {
-                target_ssid: "TestSSID".to_string(),
+                target_ssids: SsidList(vec!["TestSSID".to_string()]),
+                exclude_ssids: vec![],
                 wg_interface: "wg0".to_string(),
                 nm_connection: None,
                 monitor_interface: None,
@@ -295,7 +367,8 @@ mod tests {
 
         let config = Config {
             general: GeneralConfig {
-                target_ssid: "TestSSID".to_string(),
+                target_ssids: SsidList(vec!["TestSSID".to_string()]),
+                exclude_ssids: vec![],
                 wg_interface: "".to_string(),
                 nm_connection: None,
                 monitor_interface: None,

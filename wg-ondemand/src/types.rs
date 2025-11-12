@@ -52,8 +52,13 @@ pub struct Config {
 /// General configuration options
 #[derive(Debug, Deserialize, Clone)]
 pub struct GeneralConfig {
-    /// Target SSID to monitor for connection
-    pub target_ssid: String,
+    /// Target SSIDs to monitor (whitelist). If empty, monitors on all networks.
+    /// Can also use singular 'target_ssid' for backward compatibility.
+    #[serde(default, alias = "target_ssid")]
+    pub target_ssids: SsidList,
+    /// SSIDs to exclude from monitoring (blacklist). Takes precedence over target_ssids.
+    #[serde(default)]
+    pub exclude_ssids: Vec<String>,
     /// WireGuard interface name
     pub wg_interface: String,
     /// NetworkManager connection name (if using NetworkManager instead of wg-quick)
@@ -68,6 +73,52 @@ pub struct GeneralConfig {
     /// Log level (trace, debug, info, warn, error)
     #[serde(default = "default_log_level")]
     pub log_level: String,
+}
+
+/// Custom type to handle both single SSID (backward compat) and list of SSIDs
+#[derive(Debug, Clone, Default)]
+pub struct SsidList(pub Vec<String>);
+
+impl<'de> Deserialize<'de> for SsidList {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, Visitor};
+        use std::fmt;
+
+        struct SsidListVisitor;
+
+        impl<'de> Visitor<'de> for SsidListVisitor {
+            type Value = SsidList;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a string or a list of strings")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<SsidList, E>
+            where
+                E: de::Error,
+            {
+                // Single SSID string (backward compatibility)
+                Ok(SsidList(vec![value.to_string()]))
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<SsidList, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                // List of SSIDs
+                let mut vec = Vec::new();
+                while let Some(elem) = seq.next_element()? {
+                    vec.push(elem);
+                }
+                Ok(SsidList(vec))
+            }
+        }
+
+        deserializer.deserialize_any(SsidListVisitor)
+    }
 }
 
 /// Subnet configuration
