@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <object class="GtkMenu" id="menu">
+    <child>
+      <object class="GtkMenuItem" id="start">
+        <property name="label">Start Service</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="stop">
+        <property name="label">Stop Service</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="restart">
+        <property name="label">Restart Service</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkSeparatorMenuItem" id="delimiter1"/>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="status">
+        <property name="label">View Status</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="logs">
+        <property name="label">View Logs</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="config">
+        <property name="label">Edit Config</property>
+      </object>
+    </child>
+  </object>
+</interface>

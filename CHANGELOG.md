@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - TC qdisc setup script integrated into systemd service
 - Startup detection of existing WireGuard tunnels
 - Proper idle timeout monitoring for pre-existing tunnels
+- Waybar widget for desktop integration with status display and action menu
+- `wg-ondemand-ctl` helper CLI for operational tasks (status, start, stop, logs, config)
+- Statically-linked musl binaries for universal Linux compatibility
 
 ### Changed
 - eBPF polling interval increased from 100ms to 1000ms (90% CPU wakeup reduction)
@@ -20,11 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - eBPF ring buffer reduced from 256KB to 16KB
 - Replaced process spawning with netlink API for stats (100x performance improvement)
 - Cached ring buffer reference to eliminate repeated map lookups
+- Release binaries are now statically linked with musl (no SELinux configuration needed)
+- Improved status detection logic in wg-ondemand-ctl for accurate service state reporting
 
 ### Fixed
 - Daemon now properly detects and manages existing tunnels at startup
 - Idle timeout now works correctly for tunnels that were already up
 - TC qdisc issues on network interfaces with noqueue
+- Waybar widget now correctly shows "Idle" state when service is active but no tunnel is connected
 
 ### Performance
 - CPU wakeups reduced from ~88,500/day to <10,000/day (89% reduction)
