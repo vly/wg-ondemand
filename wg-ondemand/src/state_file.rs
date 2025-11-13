@@ -18,8 +18,7 @@ pub fn write_state(state: TunnelState, ssid: Option<&str>) -> Result<()> {
     // Create directory if it doesn't exist
     let state_dir = Path::new(STATE_DIR);
     if !state_dir.exists() {
-        fs::create_dir_all(state_dir)
-            .context("Failed to create state directory")?;
+        fs::create_dir_all(state_dir).context("Failed to create state directory")?;
     }
 
     // Get current timestamp
@@ -45,8 +44,7 @@ pub fn write_state(state: TunnelState, ssid: Option<&str>) -> Result<()> {
         timestamp
     );
 
-    fs::write(STATE_FILE, content)
-        .context("Failed to write state file")?;
+    fs::write(STATE_FILE, content).context("Failed to write state file")?;
 
     Ok(())
 }

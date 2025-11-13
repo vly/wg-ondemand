@@ -241,7 +241,9 @@ impl SsidMonitor {
                     let _ = tx.send(NetworkEvent::ConnectedToTarget(current)).await;
                 } else {
                     // Fallback if we can't get SSID
-                    let _ = tx.send(NetworkEvent::ConnectedToTarget(String::new())).await;
+                    let _ = tx
+                        .send(NetworkEvent::ConnectedToTarget(String::new()))
+                        .await;
                 }
             } else if !is_connected && was_connected {
                 log::info!("Disconnected from monitored SSID");
