@@ -182,14 +182,17 @@ impl EbpfManager {
 
         self.link_id = Some(link_id);
 
-        // Cache ring buffer reference on attach to avoid repeated map lookups
-        let rb = RingBuf::try_from(
-            self.ebpf
-                .take_map("EVENTS")
-                .context("Failed to get EVENTS ringbuf")?,
-        )
-        .context("Failed to convert to RingBuf")?;
-        self.ringbuf = Some(rb);
+        // Cache ring buffer reference on first attach
+        // take_map() can only be called once, so only do it if not already cached
+        if self.ringbuf.is_none() {
+            let rb = RingBuf::try_from(
+                self.ebpf
+                    .take_map("EVENTS")
+                    .context("Failed to get EVENTS ringbuf")?,
+            )
+            .context("Failed to convert to RingBuf")?;
+            self.ringbuf = Some(rb);
+        }
 
         log::info!("Attached eBPF program to {} egress", self.interface);
         Ok(())
@@ -209,8 +212,8 @@ impl EbpfManager {
                 .detach(link_id)
                 .context("Failed to detach eBPF program")?;
 
-            // Clear cached ring buffer on detach
-            self.ringbuf = None;
+            // Keep ringbuf cached - take_map() can only be called once per BPF object lifetime
+            // The ringbuf reference remains valid even when the program is detached
 
             log::info!("Detached eBPF program from {}", self.interface);
         }
