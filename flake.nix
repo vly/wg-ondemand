@@ -23,6 +23,7 @@
         # in stable releases. We use nightly or rely on bpf-linker to handle compilation.
         rustToolchain = pkgs.rust-bin.selectLatestNightlyWith (toolchain: toolchain.default.override {
           extensions = [ "rust-src" "rust-analyzer" ];
+          targets = [ "x86_64-unknown-linux-musl" ];
         });
 
         # eBPF build dependencies
@@ -51,6 +52,11 @@
           dbus
           networkmanager
           wireguard-tools
+        ];
+
+        # Static build dependencies (musl)
+        muslDeps = with pkgs.pkgsStatic; [
+          openssl
         ];
 
         # Development tools
@@ -83,7 +89,7 @@
       in
       {
         devShells.default = pkgs.mkShell {
-          buildInputs = ebpfDeps ++ rustDeps ++ systemDeps ++ devTools ++ [ bpf-linker ];
+          buildInputs = ebpfDeps ++ rustDeps ++ systemDeps ++ muslDeps ++ devTools ++ [ bpf-linker ];
 
           shellHook = ''
             echo "🦀 WireGuard On-Demand Development Environment"
@@ -96,6 +102,7 @@
             echo "📋 Available commands:"
             echo "  cargo xtask build-ebpf  - Build eBPF program"
             echo "  cargo build --release   - Build userspace daemon"
+            echo "  cargo build --release --target x86_64-unknown-linux-musl - Static binary"
             echo "  sudo bpftool prog list  - List loaded eBPF programs"
             echo "  sudo tc filter show dev wlan0 egress - Show TC filters"
             echo ""
@@ -110,11 +117,16 @@
             # eBPF-specific environment
             export BPF_CLANG="${pkgs.llvmPackages_latest.clang}/bin/clang"
             export BPF_CFLAGS="-I${pkgs.libbpf}/include"
+
+            # Musl build environment
+            export PKG_CONFIG_ALLOW_CROSS=1
+            export PKG_CONFIG_PATH="${pkgs.pkgsStatic.openssl.dev}/lib/pkgconfig"
           '';
 
           # Environment variables for build
           LIBCLANG_PATH = "${pkgs.llvmPackages_latest.libclang.lib}/lib";
           RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
+          PKG_CONFIG_ALLOW_CROSS = "1";
         };
 
         # Package definition (for building the project)

@@ -34,11 +34,56 @@ check_root() {
 }
 
 cmd_status() {
+    # Determine service state
+    local status=""
+    if systemctl is-active --quiet "$SERVICE_NAME"; then
+        status="active"
+    elif systemctl is-enabled --quiet "$SERVICE_NAME" 2>/dev/null; then
+        status="inactive"
+    else
+        status="disabled"
+    fi
+
+    # Get tunnel state from logs if service is active
+    local tunnel_state="unknown"
+    local ssid=""
+
+    if [[ "$status" == "active" ]]; then
+        local logs=$(journalctl -u "$SERVICE_NAME" -n 50 --no-pager 2>/dev/null || echo "")
+
+        # Check for tunnel activation (highest priority - means VPN is connected)
+        if echo "$logs" | grep -q "Tunnel activated successfully"; then
+            tunnel_state="connected"
+        # Check for active monitoring on target SSID
+        elif echo "$logs" | grep -q "Connected to monitored SSID:"; then
+            tunnel_state="monitoring"
+        # If service is running but no active state, it's idle
+        else
+            tunnel_state="idle"
+        fi
+
+        # Extract SSID if monitoring
+        ssid=$(echo "$logs" | grep -o "Connected to monitored SSID: [^\"]*" | tail -1 | cut -d: -f2- | xargs)
+    fi
+
+    # Output JSON if --json flag is present
+    if [[ "$1" == "--json" ]]; then
+        cat << EOF
+{
+    "service_status": "$status",
+    "tunnel_state": "$tunnel_state",
+    "ssid": "$ssid"
+}
+EOF
+        return
+    fi
+
+    # Human-readable output
     echo "=== WireGuard On-Demand Status ==="
     echo
 
     # Service status
-    if systemctl is-active --quiet "$SERVICE_NAME"; then
+    if [[ "$status" == "active" ]]; then
         echo -e "Service: ${GREEN}running${NC}"
     else
         echo -e "Service: ${RED}stopped${NC}"
@@ -174,7 +219,7 @@ wg-ondemand-ctl - WireGuard On-Demand control utility
 Usage: wg-ondemand-ctl <command> [options]
 
 Commands:
-  status              Show service status and recent logs
+  status [--json]     Show service status and recent logs (--json for machine-readable output)
   start               Start the daemon (requires sudo)
   stop                Stop the daemon (requires sudo)
   restart             Restart the daemon (requires sudo)
@@ -188,6 +233,7 @@ Commands:
 
 Examples:
   wg-ondemand-ctl status
+  wg-ondemand-ctl status --json
   sudo wg-ondemand-ctl restart
   wg-ondemand-ctl logs -f
   sudo wg-ondemand-ctl config edit
@@ -198,7 +244,8 @@ EOF
 # Main command dispatcher
 case "${1:-}" in
     status)
-        cmd_status
+        shift
+        cmd_status "$@"
         ;;
     start)
         cmd_start
