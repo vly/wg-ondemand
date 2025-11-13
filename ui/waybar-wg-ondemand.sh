@@ -34,15 +34,15 @@ case "$status" in
                 fi
                 class="monitoring"
                 ;;
-            idle)
+            idle|inactive|deactivating|activating)
                 text="󰀃 Idle"
                 tooltip="WireGuard: Idle"
                 class="idle"
                 ;;
             *)
-                text="󰖂 On"
-                tooltip="WireGuard: Running"
-                class="active"
+                text="󰀄 ?"
+                tooltip="WireGuard: Unknown"
+                class="unknown"
                 ;;
         esac
         ;;
