@@ -44,11 +44,25 @@ cmd_status() {
         status="disabled"
     fi
 
-    # Get tunnel state from logs if service is active
+    # Get tunnel state from state file or fall back to logs
     local tunnel_state="unknown"
     local ssid=""
+    local STATE_FILE="/run/wg-ondemand/state"
 
-    if [[ "$status" == "active" ]]; then
+    if [[ "$status" == "active" ]] && [[ -f "$STATE_FILE" ]]; then
+        # Read state from state file (key=value format)
+        while IFS='=' read -r key value; do
+            case "$key" in
+                STATE)
+                    tunnel_state="$value"
+                    ;;
+                SSID)
+                    ssid="$value"
+                    ;;
+            esac
+        done < "$STATE_FILE"
+    elif [[ "$status" == "active" ]]; then
+        # Fallback to log parsing if state file doesn't exist
         local logs=$(journalctl -u "$SERVICE_NAME" -n 50 --no-pager 2>/dev/null || echo "")
 
         # Check for tunnel activation (highest priority - means VPN is connected)

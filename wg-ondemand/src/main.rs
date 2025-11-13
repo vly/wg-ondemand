@@ -12,6 +12,7 @@ use wg_ondemand::{
     ebpf_loader::EbpfManager,
     ssid_monitor::{NetworkEvent, SsidMonitor},
     state::{StateAction, StateCommand, StateManager},
+    state_file,
     types::{TrafficEvent, TunnelState},
     wg_controller::{self, WgController},
 };
@@ -274,6 +275,12 @@ async fn async_main() -> Result<()> {
     let mut sigint = signal::unix::signal(signal::unix::SignalKind::interrupt())
         .context("Failed to set up SIGINT handler")?;
 
+    // Track current SSID for state file updates
+    let mut current_ssid: Option<String> = None;
+
+    // Write initial state
+    let _ = state_file::write_state(state_manager.state(), None);
+
     // Main event loop
     loop {
         tokio::select! {
@@ -306,12 +313,14 @@ async fn async_main() -> Result<()> {
             // Network events (SSID changes)
             Some(event) = network_rx.recv() => {
                 match event {
-                    NetworkEvent::ConnectedToTarget => {
+                    NetworkEvent::ConnectedToTarget(ssid) => {
                         log::info!("Network event: Connected to target SSID");
+                        current_ssid = if ssid.is_empty() { None } else { Some(ssid) };
                         state_tx.send(StateCommand::StartMonitoring).await?;
                     }
                     NetworkEvent::Disconnected => {
                         log::info!("Network event: Disconnected from target SSID");
+                        current_ssid = None;
                         state_tx.send(StateCommand::StopMonitoring).await?;
                     }
                 }
@@ -399,6 +408,12 @@ async fn async_main() -> Result<()> {
 
                     StateAction::None => {}
                 }
+
+                // Write state file after any state transition
+                let ssid_ref = current_ssid.as_deref();
+                if let Err(e) = state_file::write_state(state_manager.state(), ssid_ref) {
+                    log::warn!("Failed to write state file: {}", e);
+                }
             }
 
             // eBPF events (traffic detection) - check periodically
@@ -465,6 +480,9 @@ async fn async_main() -> Result<()> {
             }
         }
     }
+
+    // Clean up state file
+    state_file::cleanup();
 
     // Perform graceful shutdown
     graceful_shutdown(ebpf_manager, wg_controller, state_manager.state()).await?;

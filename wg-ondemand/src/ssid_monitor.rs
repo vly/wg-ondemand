@@ -13,8 +13,8 @@ use zbus::{proxy, Connection};
 /// Network event types
 #[derive(Debug, Clone)]
 pub enum NetworkEvent {
-    /// Connected to the target SSID
-    ConnectedToTarget,
+    /// Connected to the target SSID (with SSID name)
+    ConnectedToTarget(String),
     /// Disconnected from the target SSID (or connected to different network)
     Disconnected,
 }
@@ -238,8 +238,13 @@ impl SsidMonitor {
             if is_connected && !was_connected {
                 if let Ok(Some(current)) = self.current_ssid().await {
                     log::info!("Connected to monitored SSID: {}", current);
+                    let _ = tx.send(NetworkEvent::ConnectedToTarget(current)).await;
+                } else {
+                    // Fallback if we can't get SSID
+                    let _ = tx
+                        .send(NetworkEvent::ConnectedToTarget(String::new()))
+                        .await;
                 }
-                let _ = tx.send(NetworkEvent::ConnectedToTarget).await;
             } else if !is_connected && was_connected {
                 log::info!("Disconnected from monitored SSID");
                 let _ = tx.send(NetworkEvent::Disconnected).await;
@@ -265,9 +270,11 @@ mod tests {
 
     #[test]
     fn test_network_event_types() {
-        let event = NetworkEvent::ConnectedToTarget;
+        let event = NetworkEvent::ConnectedToTarget("TestSSID".to_string());
         match event {
-            NetworkEvent::ConnectedToTarget => {}
+            NetworkEvent::ConnectedToTarget(ssid) => {
+                assert_eq!(ssid, "TestSSID");
+            }
             _ => unreachable!("Expected ConnectedToTarget variant"),
         }
     }
