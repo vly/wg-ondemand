@@ -46,6 +46,7 @@ pub enum StateAction {
 pub struct StateManager {
     state: TunnelState,
     idle_timeout: Duration,
+    on_monitored_ssid: bool,
 }
 
 impl StateManager {
@@ -54,6 +55,7 @@ impl StateManager {
         Self {
             state: TunnelState::Inactive,
             idle_timeout: Duration::from_secs(idle_timeout_secs),
+            on_monitored_ssid: false,
         }
     }
 
@@ -66,6 +68,7 @@ impl StateManager {
             (TunnelState::Inactive, StateCommand::StartMonitoring) => {
                 log::info!("Starting monitoring (connected to target SSID)");
                 self.state = TunnelState::Monitoring;
+                self.on_monitored_ssid = true;
                 StateAction::AttachEbpf
             }
 
@@ -73,12 +76,14 @@ impl StateManager {
             (TunnelState::Monitoring, StateCommand::StopMonitoring) => {
                 log::info!("Stopping monitoring (disconnected from target SSID)");
                 self.state = TunnelState::Inactive;
+                self.on_monitored_ssid = false;
                 StateAction::DetachEbpf
             }
 
             (TunnelState::Active, StateCommand::StopMonitoring) => {
                 log::info!("Disconnected from target SSID, deactivating tunnel");
                 self.state = TunnelState::Deactivating;
+                self.on_monitored_ssid = false;
                 // First deactivate tunnel, then detach eBPF
                 StateAction::DeactivateTunnel
             }
@@ -86,6 +91,7 @@ impl StateManager {
             (TunnelState::Activating, StateCommand::StopMonitoring) => {
                 log::warn!("Disconnected while activating tunnel");
                 self.state = TunnelState::Inactive;
+                self.on_monitored_ssid = false;
                 StateAction::DetachEbpf
             }
 
@@ -112,9 +118,15 @@ impl StateManager {
 
             // Tunnel brought down successfully
             (TunnelState::Deactivating, StateCommand::TunnelDown) => {
-                log::info!("Tunnel deactivated, returning to monitoring");
-                self.state = TunnelState::Monitoring;
-                StateAction::AttachEbpf
+                if self.on_monitored_ssid {
+                    log::info!("Tunnel deactivated, returning to monitoring");
+                    self.state = TunnelState::Monitoring;
+                    StateAction::AttachEbpf
+                } else {
+                    log::info!("Tunnel deactivated, returning to inactive");
+                    self.state = TunnelState::Inactive;
+                    StateAction::DetachEbpf
+                }
             }
 
             // Idle timeout reached - deactivate tunnel
@@ -122,6 +134,13 @@ impl StateManager {
                 log::info!("Idle timeout reached, deactivating tunnel");
                 self.state = TunnelState::Deactivating;
                 StateAction::DeactivateTunnel
+            }
+
+            // Disconnected while deactivating (e.g., idle timeout triggered, then SSID changed)
+            (TunnelState::Deactivating, StateCommand::StopMonitoring) => {
+                log::info!("Disconnected from target SSID while deactivating");
+                self.on_monitored_ssid = false;
+                StateAction::None // Continue deactivating, will go to Inactive when TunnelDown arrives
             }
 
             // Ignore traffic events while activating, deactivating, or active
