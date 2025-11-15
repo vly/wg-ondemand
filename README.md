@@ -1,6 +1,6 @@
 # WireGuard On-Demand for Linux
 
-**Automatic VPN activation when you need it, idle when you don't.**
+**On-demand activation of Wireguard tunnel.**
 
 ## What is it?
 
@@ -39,9 +39,9 @@ sudo dnf install wg-ondemand
 Download from [GitHub Releases](https://github.com/vly/wg-ondemand/releases):
 
 ```bash
-wget https://github.com/vly/wg-ondemand/releases/latest/download/wg-ondemand-v0.1.0.tar.gz
-tar xzf wg-ondemand-v0.1.0.tar.gz
-cd wg-ondemand-v0.1.0/
+wget https://github.com/vly/wg-ondemand/releases/latest/download/wg-ondemand-v0.3.1.tar.gz
+tar xzf wg-ondemand-v0.3.1.tar.gz
+cd wg-ondemand-v0.3.1/
 sudo ./install.sh
 ```
 
