@@ -12,6 +12,7 @@
 //!
 //! - [`config`]: Configuration file parsing and validation
 //! - [`ebpf_loader`]: eBPF program management for traffic monitoring
+//! - [`route_manager`]: Dynamic route management for traffic detection
 //! - [`ssid_monitor`]: Network/SSID change detection via D-Bus
 //! - [`state`]: State machine for tunnel lifecycle management
 //! - [`state_file`]: State file writing for external monitoring
@@ -20,6 +21,7 @@
 
 pub mod config;
 pub mod ebpf_loader;
+pub mod route_manager;
 pub mod ssid_monitor;
 pub mod state;
 pub mod state_file;

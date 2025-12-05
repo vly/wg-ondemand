@@ -10,6 +10,7 @@ use tokio::time::interval;
 use wg_ondemand::{
     config::{self, load_config},
     ebpf_loader::EbpfManager,
+    route_manager::RouteManager,
     ssid_monitor::{NetworkEvent, SsidMonitor},
     state::{StateAction, StateCommand, StateManager},
     state_file,
@@ -219,6 +220,9 @@ async fn async_main() -> Result<()> {
     let mut ebpf_manager = EbpfManager::load(&monitor_iface, &config.subnets.ranges)
         .context("Failed to load eBPF program")?;
 
+    // Create route manager for traffic detection
+    let mut route_manager = RouteManager::new(monitor_iface.clone());
+
     // Create SSID monitor
     let ssid_monitor = SsidMonitor::new(
         config.general.target_ssids.0.clone(),
@@ -349,7 +353,14 @@ async fn async_main() -> Result<()> {
                                     }
                                     Ok(false) => {
                                         // Safe to attach - local IP doesn't conflict
-                                        log::info!("Action: Attaching eBPF program");
+                                        log::info!("Action: Attaching eBPF program and adding monitoring routes");
+
+                                        // Add monitoring routes first
+                                        if let Err(e) = route_manager.add_routes(&config.subnets.ranges).await {
+                                            log::error!("Failed to add monitoring routes: {}", e);
+                                        }
+
+                                        // Then attach eBPF
                                         if let Err(e) = ebpf_manager.attach() {
                                             log::error!("Failed to attach eBPF: {}", e);
                                         } else {
@@ -374,9 +385,16 @@ async fn async_main() -> Result<()> {
                     }
 
                     StateAction::DetachEbpf => {
-                        log::info!("Action: Detaching eBPF program");
+                        log::info!("Action: Detaching eBPF program and removing monitoring routes");
+
+                        // Detach eBPF first
                         if let Err(e) = ebpf_manager.detach() {
                             log::error!("Failed to detach eBPF: {}", e);
+                        }
+
+                        // Then remove routes
+                        if let Err(e) = route_manager.remove_routes().await {
+                            log::error!("Failed to remove monitoring routes: {}", e);
                         }
                     }
 

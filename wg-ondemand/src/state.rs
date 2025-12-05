@@ -34,9 +34,9 @@ pub enum StateAction {
     ActivateTunnel,
     /// Deactivate the WireGuard tunnel
     DeactivateTunnel,
-    /// Attach eBPF program
+    /// Attach eBPF program and add monitoring routes
     AttachEbpf,
-    /// Detach eBPF program
+    /// Detach eBPF program and remove monitoring routes
     DetachEbpf,
     /// No action needed
     None,
