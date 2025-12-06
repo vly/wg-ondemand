@@ -136,6 +136,122 @@ jobs:
         # Create checksum for tarball
         sha256sum ${RELEASE_DIR}.tar.gz > ${RELEASE_DIR}.tar.gz.sha256
 
+    - name: Build Debian package
+      run: |
+        VERSION=${{ steps.version.outputs.VERSION }}
+        VERSION_NO_V=${VERSION#v}
+        DEB_DIR="wg-ondemand_${VERSION_NO_V}_amd64"
+
+        # Create Debian package structure
+        mkdir -p ${DEB_DIR}/DEBIAN
+        mkdir -p ${DEB_DIR}/usr/bin
+        mkdir -p ${DEB_DIR}/usr/lib/systemd/system
+        mkdir -p ${DEB_DIR}/etc/wg-ondemand
+        mkdir -p ${DEB_DIR}/usr/share/doc/wg-ondemand
+
+        # Copy binary (static musl binary)
+        cp target/x86_64-unknown-linux-musl/release/wg-ondemand ${DEB_DIR}/usr/bin/
+        cp scripts/setup-tc.sh ${DEB_DIR}/usr/bin/wg-ondemand-setup-tc
+        cp scripts/wg-ondemand-ctl ${DEB_DIR}/usr/bin/wg-ondemand-ctl
+        chmod +x ${DEB_DIR}/usr/bin/*
+
+        # Copy systemd service
+        cp systemd/wg-ondemand.service ${DEB_DIR}/usr/lib/systemd/system/
+
+        # Copy config example
+        cp config/wg-ondemand.toml ${DEB_DIR}/etc/wg-ondemand/wg-ondemand.toml.example
+
+        # Copy documentation
+        cp README.md ${DEB_DIR}/usr/share/doc/wg-ondemand/
+        cp docs/*.md ${DEB_DIR}/usr/share/doc/wg-ondemand/ 2>/dev/null || true
+
+        # Create control file
+        cat > ${DEB_DIR}/DEBIAN/control << EOF
+        Package: wg-ondemand
+        Version: ${VERSION_NO_V}
+        Section: net
+        Priority: optional
+        Architecture: amd64
+        Depends: wireguard-tools, network-manager
+        Maintainer: wg-ondemand developers <noreply@github.com>
+        Description: Automatic WireGuard VPN activation on-demand
+         A lightweight daemon that automatically activates your WireGuard VPN tunnel
+         only when accessing specific networks, saving mobile data and battery life.
+         .
+         Features:
+          - Automatic VPN activation based on traffic detection
+          - SSID-aware (only works on specific WiFi networks)
+          - Automatic idle timeout and deactivation
+          - eBPF-based traffic monitoring for minimal overhead
+          - NetworkManager integration
+         .
+         This package contains statically-linked binaries that work on any
+         Linux distribution without additional dependencies.
+        Homepage: https://github.com/vly/wg-ondemand
+        EOF
+
+        # Create postinst script
+        cat > ${DEB_DIR}/DEBIAN/postinst << 'EOF'
+        #!/bin/bash
+        set -e
+
+        # Reload systemd
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload >/dev/null 2>&1 || true
+        fi
+
+        # Create config if it doesn't exist
+        if [ ! -f /etc/wg-ondemand/config.toml ]; then
+            if [ -f /etc/wg-ondemand/wg-ondemand.toml.example ]; then
+                echo "Creating default config at /etc/wg-ondemand/config.toml"
+                cp /etc/wg-ondemand/wg-ondemand.toml.example /etc/wg-ondemand/config.toml
+                echo "Please edit /etc/wg-ondemand/config.toml before starting the service"
+            fi
+        fi
+
+        exit 0
+        EOF
+
+        # Create prerm script
+        cat > ${DEB_DIR}/DEBIAN/prerm << 'EOF'
+        #!/bin/bash
+        set -e
+
+        # Stop and disable service
+        if [ -d /run/systemd/system ]; then
+            systemctl stop wg-ondemand.service >/dev/null 2>&1 || true
+            systemctl disable wg-ondemand.service >/dev/null 2>&1 || true
+        fi
+
+        exit 0
+        EOF
+
+        # Create postrm script
+        cat > ${DEB_DIR}/DEBIAN/postrm << 'EOF'
+        #!/bin/bash
+        set -e
+
+        # Reload systemd
+        if [ "$1" = "remove" ] && [ -d /run/systemd/system ]; then
+            systemctl daemon-reload >/dev/null 2>&1 || true
+        fi
+
+        exit 0
+        EOF
+
+        # Make scripts executable
+        chmod 755 ${DEB_DIR}/DEBIAN/postinst
+        chmod 755 ${DEB_DIR}/DEBIAN/prerm
+        chmod 755 ${DEB_DIR}/DEBIAN/postrm
+
+        # Build the package
+        dpkg-deb --build --root-owner-group ${DEB_DIR}
+
+        # Create checksum
+        sha256sum ${DEB_DIR}.deb > ${DEB_DIR}.deb.sha256
+
+        echo "✓ Debian package built: ${DEB_DIR}.deb"
+
     - name: Upload release artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -143,6 +259,8 @@ jobs:
         path: |
           wg-ondemand-*.tar.gz
           wg-ondemand-*.tar.gz.sha256
+          wg-ondemand_*.deb
+          wg-ondemand_*.deb.sha256
 
     - name: Create GitHub Release
       if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
@@ -151,6 +269,8 @@ jobs:
         files: |
           wg-ondemand-*.tar.gz
           wg-ondemand-*.tar.gz.sha256
+          wg-ondemand_*.deb
+          wg-ondemand_*.deb.sha256
         body: |
           # WireGuard On-Demand ${{ steps.version.outputs.VERSION }}
 
@@ -158,6 +278,20 @@ jobs:
 
           ## Installation
 
+          ### Debian/Ubuntu (.deb package)
+          ```bash
+          # Download the .deb file from the Assets section below, then:
+          sudo dpkg -i wg-ondemand_*_amd64.deb
+
+          # Configure
+          sudo nano /etc/wg-ondemand/config.toml
+
+          # Start service
+          sudo systemctl enable wg-ondemand
+          sudo systemctl start wg-ondemand
+          ```
+
+          ### Manual Installation (tarball)
           ```bash
           # Download and extract
           tar xzf wg-ondemand-${{ steps.version.outputs.VERSION }}.tar.gz
@@ -176,6 +310,8 @@ jobs:
 
           ## What's Included
 
+          - **Debian package (.deb)** - Easy installation for Debian/Ubuntu
+          - **Tarball** - Manual installation for any distro
           - Statically-linked binaries for x86_64 Linux (works on any distro)
           - Installation and uninstallation scripts
           - Systemd service file

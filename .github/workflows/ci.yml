@@ -45,8 +45,14 @@ jobs:
     - name: Run tests
       run: nix develop --command cargo test --package wg-ondemand --lib
 
-    - name: Build release
-      run: nix develop --command cargo build --release --package wg-ondemand
+    - name: Build release (musl static binary)
+      run: nix develop --command cargo build --release --target x86_64-unknown-linux-musl --package wg-ondemand
+
+    - name: Verify static binary
+      run: |
+        file target/x86_64-unknown-linux-musl/release/wg-ondemand | grep -q "static-pie linked"
+        ldd target/x86_64-unknown-linux-musl/release/wg-ondemand 2>&1 | grep -q "statically linked"
+        echo "✓ Binary is statically linked with musl"
 
     - name: Verify scripts are executable
       run: |
