@@ -3,6 +3,8 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::signal;
 use tokio::sync::mpsc;
@@ -33,6 +35,12 @@ const IDLE_CHECK_INTERVAL_SECS: u64 = 60;
 /// 1 second balances responsiveness with battery efficiency
 /// This reduces CPU wakeups from 864K/day to 86K/day
 const EBPF_POLL_INTERVAL_MILLIS: u64 = 1000;
+
+/// Maximum number of retry attempts for eBPF attachment when interface has no IP
+const MAX_ATTACHMENT_RETRIES: u8 = 5;
+
+/// Initial retry delay in seconds (exponential backoff: 1s, 2s, 4s, 8s, 16s)
+const INITIAL_RETRY_DELAY_SECS: u64 = 1;
 
 #[derive(Parser)]
 #[command(name = "wg-ondemand")]
@@ -103,6 +111,80 @@ async fn auto_detect_interface() -> Result<String> {
     anyhow::bail!(
         "Could not auto-detect network interface. Please specify monitor_interface in config."
     )
+}
+
+/// Spawn a background task to retry eBPF attachment with exponential backoff
+/// Returns true if retry task was spawned, false if one is already running
+fn spawn_attachment_retry_task(
+    interface: String,
+    state_tx: mpsc::Sender<StateCommand>,
+    retry_in_progress: Arc<AtomicBool>,
+) {
+    // Check if retry is already in progress
+    if retry_in_progress.swap(true, Ordering::SeqCst) {
+        log::debug!("eBPF attachment retry already in progress, skipping");
+        return;
+    }
+
+    log::info!(
+        "Spawning eBPF attachment retry task (will retry up to {} times with exponential backoff)",
+        MAX_ATTACHMENT_RETRIES
+    );
+
+    tokio::spawn(async move {
+        let mut delay_secs = INITIAL_RETRY_DELAY_SECS;
+
+        for attempt in 1..=MAX_ATTACHMENT_RETRIES {
+            // Wait before retry (exponential backoff)
+            log::info!(
+                "eBPF attachment retry attempt {}/{} in {}s...",
+                attempt,
+                MAX_ATTACHMENT_RETRIES,
+                delay_secs
+            );
+            tokio::time::sleep(Duration::from_secs(delay_secs)).await;
+
+            // Check if interface now has an IP address
+            match get_interface_ip(&interface) {
+                Ok(Some(_ip)) => {
+                    log::info!(
+                        "Interface {} now has IP address, triggering eBPF attachment",
+                        interface
+                    );
+                    // Send retry command to trigger attachment
+                    if let Err(e) = state_tx.send(StateCommand::RetryEbpfAttachment).await {
+                        log::error!("Failed to send retry command: {}", e);
+                    }
+                    // Success - stop retrying
+                    retry_in_progress.store(false, Ordering::SeqCst);
+                    return;
+                }
+                Ok(None) => {
+                    log::debug!(
+                        "Interface {} still has no IP address (attempt {}/{})",
+                        interface,
+                        attempt,
+                        MAX_ATTACHMENT_RETRIES
+                    );
+                }
+                Err(e) => {
+                    log::warn!("Failed to check interface IP during retry: {}", e);
+                }
+            }
+
+            // Exponential backoff: double the delay for next attempt
+            delay_secs *= 2;
+        }
+
+        // All retries exhausted
+        log::error!(
+            "Failed to attach eBPF after {} attempts. Interface {} still has no IP address. \
+            Consider restarting the daemon after DHCP completes.",
+            MAX_ATTACHMENT_RETRIES,
+            interface
+        );
+        retry_in_progress.store(false, Ordering::SeqCst);
+    });
 }
 
 /// Perform graceful shutdown: clean up resources before exiting
@@ -235,6 +317,9 @@ async fn async_main() -> Result<()> {
     let (network_tx, mut network_rx) = mpsc::channel::<NetworkEvent>(NETWORK_EVENT_CHANNEL_SIZE);
     let (state_tx, mut state_rx) = mpsc::channel::<StateCommand>(STATE_COMMAND_CHANNEL_SIZE);
 
+    // Track whether an eBPF attachment retry task is running
+    let retry_in_progress = Arc::new(AtomicBool::new(false));
+
     // Check initial SSID and tunnel state before spawning monitor
     let initial_connected = ssid_monitor.is_connected_to_target().await.unwrap_or(false);
     let tunnel_already_up = wg_controller.is_up().await;
@@ -325,6 +410,8 @@ async fn async_main() -> Result<()> {
                     NetworkEvent::Disconnected => {
                         log::info!("Network event: Disconnected from target SSID");
                         current_ssid = None;
+                        // Reset retry flag so a new retry can be spawned on next connection
+                        retry_in_progress.store(false, Ordering::SeqCst);
                         state_tx.send(StateCommand::StopMonitoring).await?;
                     }
                 }
@@ -374,8 +461,14 @@ async fn async_main() -> Result<()> {
                             }
                             Ok(None) => {
                                 log::warn!(
-                                    "Interface {} has no IPv4 address yet. Skipping eBPF attachment.",
+                                    "Interface {} has no IPv4 address yet. Will retry with exponential backoff.",
                                     monitor_iface
+                                );
+                                // Spawn retry task to check for IP address and retry attachment
+                                spawn_attachment_retry_task(
+                                    monitor_iface.clone(),
+                                    state_tx.clone(),
+                                    retry_in_progress.clone(),
                                 );
                             }
                             Err(e) => {
