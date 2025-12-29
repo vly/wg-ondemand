@@ -25,6 +25,8 @@ pub enum StateCommand {
     IdleTimeout,
     /// Tunnel already up at startup (detected during initialization)
     TunnelAlreadyUp,
+    /// Retry eBPF attachment after interface gets IP address
+    RetryEbpfAttachment,
 }
 
 /// Actions to take in response to state changes
@@ -134,6 +136,12 @@ impl StateManager {
                 log::info!("Idle timeout reached, deactivating tunnel");
                 self.state = TunnelState::Deactivating;
                 StateAction::DeactivateTunnel
+            }
+
+            // Retry eBPF attachment (e.g., after interface gets IP address)
+            (TunnelState::Monitoring, StateCommand::RetryEbpfAttachment) => {
+                log::info!("Retrying eBPF attachment");
+                StateAction::AttachEbpf
             }
 
             // Disconnected while deactivating (e.g., idle timeout triggered, then SSID changed)
